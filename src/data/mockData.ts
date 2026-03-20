@@ -1,0 +1,260 @@
+import {
+  Conversation,
+  ChatMessage,
+  Citation,
+  Document,
+  SearchResult,
+  AuditLogEntry,
+  Job,
+} from "@/types";
+
+export const mockConversations: Conversation[] = [
+  {
+    id: "conv-1",
+    title: "Quy trình xin nghỉ phép",
+    createdAt: "2024-01-15T10:30:00Z",
+    updatedAt: "2024-01-15T10:45:00Z",
+    messageCount: 6,
+  },
+  {
+    id: "conv-2",
+    title: "Chính sách bảo mật dữ liệu",
+    createdAt: "2024-01-14T09:00:00Z",
+    updatedAt: "2024-01-14T09:30:00Z",
+    messageCount: 4,
+  },
+  {
+    id: "conv-3",
+    title: "Hướng dẫn sử dụng CRM",
+    createdAt: "2024-01-12T14:00:00Z",
+    updatedAt: "2024-01-12T14:20:00Z",
+    messageCount: 8,
+  },
+  {
+    id: "conv-4",
+    title: "Quy trình tuyển dụng",
+    createdAt: "2024-01-10T11:00:00Z",
+    updatedAt: "2024-01-10T11:15:00Z",
+    messageCount: 5,
+  },
+];
+
+export const mockCitations: Citation[] = [
+  {
+    id: "cit-1",
+    documentId: "doc-1",
+    documentTitle: "Quy trình nghỉ phép năm 2024",
+    versionId: "ver-1",
+    sectionPath: "Section 2.1 > Đăng ký nghỉ phép",
+    snippet:
+      "Nhân viên cần đăng ký nghỉ phép trước ít nhất 3 ngày làm việc thông qua hệ thống HR Portal. Đối với nghỉ phép trên 5 ngày, cần được sự phê duyệt của Trưởng phòng.",
+    score: 0.92,
+  },
+  {
+    id: "cit-2",
+    documentId: "doc-2",
+    documentTitle: "Chính sách nhân sự 2024",
+    versionId: "ver-2",
+    sectionPath: "Chapter 4 > Nghỉ phép",
+    snippet:
+      "Mỗi nhân viên chính thức được hưởng 12 ngày phép năm. Ngày phép không sử dụng có thể được chuyển sang năm sau với tối đa 5 ngày.",
+    score: 0.87,
+  },
+];
+
+export const mockMessages: ChatMessage[] = [
+  {
+    id: "msg-1",
+    role: "user",
+    content: "Làm thế nào để đăng ký nghỉ phép?",
+    timestamp: "2024-01-15T10:30:00Z",
+  },
+  {
+    id: "msg-2",
+    role: "assistant",
+    content:
+      'Để đăng ký nghỉ phép, bạn cần thực hiện các bước sau:\n\n1. Đăng nhập vào HR Portal\n2. Chọn menu "Nghỉ phép" > "Đăng ký mới"\n3. Điền thông tin ngày bắt đầu, ngày kết thúc và lý do\n4. Nhấn "Gửi yêu cầu"\n\nLưu ý quan trọng:\n- Cần đăng ký trước ít nhất 3 ngày làm việc\n- Nghỉ phép trên 5 ngày cần sự phê duyệt của Trưởng phòng\n- Mỗi năm bạn được 12 ngày phép',
+    timestamp: "2024-01-15T10:30:15Z",
+    citations: mockCitations,
+    traceId: "trace-abc123def456",
+    status: "success",
+  },
+];
+
+export const mockDocuments: Document[] = [
+  {
+    id: "doc-1",
+    title: "Quy trình nghỉ phép năm 2024",
+    ownerDepartment: "HR",
+    sensitivity_level: "internal",
+    status: "approved",
+    currentVersion: "v2.1",
+    updatedAt: "2024-01-10T08:00:00Z",
+    createdAt: "2023-06-15T10:00:00Z",
+    tags: ["HR", "Leave", "Policy"],
+  },
+  {
+    id: "doc-2",
+    title: "Chính sách bảo mật thông tin",
+    ownerDepartment: "IT Security",
+    sensitivity_level: "confidential",
+    status: "approved",
+    currentVersion: "v3.0",
+    updatedAt: "2024-01-08T14:30:00Z",
+    createdAt: "2022-01-01T00:00:00Z",
+    tags: ["Security", "Policy", "Compliance"],
+  },
+  {
+    id: "doc-3",
+    title: "Hướng dẫn sử dụng CRM",
+    ownerDepartment: "Sales",
+    sensitivity_level: "internal",
+    status: "review",
+    currentVersion: "v1.5",
+    updatedAt: "2024-01-12T09:00:00Z",
+    createdAt: "2023-09-01T00:00:00Z",
+    tags: ["CRM", "Sales", "Guide"],
+  },
+  {
+    id: "doc-4",
+    title: "Quy trình tuyển dụng",
+    ownerDepartment: "HR",
+    sensitivity_level: "internal",
+    status: "draft",
+    currentVersion: "v4.0-draft",
+    updatedAt: "2024-01-14T16:00:00Z",
+    createdAt: "2021-03-15T00:00:00Z",
+    tags: ["HR", "Recruitment", "Process"],
+  },
+  {
+    id: "doc-5",
+    title: "Chính sách chi phí công tác",
+    ownerDepartment: "Finance",
+    sensitivity_level: "public",
+    status: "approved",
+    currentVersion: "v2.0",
+    updatedAt: "2024-01-05T11:00:00Z",
+    createdAt: "2022-07-01T00:00:00Z",
+    tags: ["Finance", "Travel", "Expense"],
+  },
+  {
+    id: "doc-6",
+    title: "Tiêu chuẩn kỹ thuật API",
+    ownerDepartment: "Engineering",
+    sensitivity_level: "internal",
+    status: "archived",
+    currentVersion: "v1.0",
+    updatedAt: "2023-06-01T00:00:00Z",
+    createdAt: "2022-01-15T00:00:00Z",
+    tags: ["Tech", "API", "Standards"],
+  },
+];
+
+export const mockSearchResults: SearchResult[] = [
+  {
+    id: "sr-1",
+    documentId: "doc-1",
+    title: "Quy trình nghỉ phép năm 2024",
+    snippet:
+      "Nhân viên cần đăng ký nghỉ phép trước ít nhất 3 ngày làm việc thông qua hệ thống HR Portal...",
+    sectionPath: "Section 2.1 > Đăng ký nghỉ phép",
+    sensitivity_level: "internal",
+    status: "approved",
+    updatedAt: "2024-01-10T08:00:00Z",
+    score: 0.95,
+    tags: ["HR", "Leave", "Policy"],
+  },
+  {
+    id: "sr-2",
+    documentId: "doc-2",
+    title: "Chính sách nhân sự 2024",
+    snippet:
+      "Mỗi nhân viên chính thức được hưởng 12 ngày phép năm. Ngày phép không sử dụng có thể được chuyển sang năm sau...",
+    sectionPath: "Chapter 4 > Nghỉ phép",
+    sensitivity_level: "internal",
+    status: "approved",
+    updatedAt: "2024-01-08T14:30:00Z",
+    score: 0.88,
+    tags: ["HR", "Policy"],
+  },
+];
+
+export const mockAuditLogs: AuditLogEntry[] = [
+  {
+    id: "log-1",
+    traceId: "trace-abc123",
+    userId: "user-1",
+    userName: "Nguyễn Văn An",
+    query: "Làm thế nào để đăng ký nghỉ phép?",
+    status: "success",
+    documentsRetrieved: 5,
+    citations: 2,
+    latencyMs: 1250,
+    timestamp: "2024-01-15T10:30:00Z",
+  },
+  {
+    id: "log-2",
+    traceId: "trace-def456",
+    userId: "user-2",
+    userName: "Trần Thị Bình",
+    query: "Chính sách bảo mật mới nhất",
+    status: "no-permission",
+    documentsRetrieved: 0,
+    citations: 0,
+    latencyMs: 450,
+    timestamp: "2024-01-15T09:15:00Z",
+  },
+  {
+    id: "log-3",
+    traceId: "trace-ghi789",
+    userId: "user-3",
+    userName: "Lê Văn Cường",
+    query: "Quy trình thanh toán hợp đồng",
+    status: "no-answer",
+    documentsRetrieved: 3,
+    citations: 0,
+    latencyMs: 890,
+    timestamp: "2024-01-15T08:45:00Z",
+  },
+];
+
+export const mockJobs: Job[] = [
+  {
+    id: "job-1",
+    type: "ingestion",
+    documentId: "doc-3",
+    versionId: "ver-1.5",
+    status: "running",
+    retryCount: 0,
+    startedAt: "2024-01-15T10:00:00Z",
+  },
+  {
+    id: "job-2",
+    type: "indexing",
+    documentId: "doc-4",
+    versionId: "ver-4.0-draft",
+    status: "queued",
+    retryCount: 0,
+  },
+  {
+    id: "job-3",
+    type: "embedding",
+    documentId: "doc-1",
+    versionId: "ver-2.1",
+    status: "succeeded",
+    retryCount: 0,
+    startedAt: "2024-01-14T15:00:00Z",
+    endedAt: "2024-01-14T15:05:00Z",
+  },
+  {
+    id: "job-4",
+    type: "ingestion",
+    documentId: "doc-5",
+    versionId: "ver-2.0",
+    status: "failed",
+    retryCount: 3,
+    startedAt: "2024-01-14T12:00:00Z",
+    endedAt: "2024-01-14T12:02:00Z",
+    error: "Document parsing failed: unsupported format",
+  },
+];
