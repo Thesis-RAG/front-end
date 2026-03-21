@@ -192,6 +192,8 @@ export default function SearchPage() {
                         <SelectItem value="confidential">
                           Confidential
                         </SelectItem>
+                        <SelectItem value="restricted">Restricted</SelectItem>
+                        <SelectItem value="top_secret">Top Secret</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

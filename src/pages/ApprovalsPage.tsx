@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   StatusBadge,
-  sensitivity_levelBadge,
+  SensitivityLevelBadge,
 } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +35,12 @@ interface ApprovalItem {
   version: string;
   previousVersion?: string;
   department: string;
-  sensitivity_level: "public" | "internal" | "confidential";
+  sensitivity_level:
+    | "public"
+    | "internal"
+    | "confidential"
+    | "restricted"
+    | "top_secret";
   submittedBy: string;
   submittedAt: string;
   status: "draft" | "review";
@@ -46,12 +51,12 @@ const mockApprovals: ApprovalItem[] = [
   {
     id: "apr-1",
     documentId: "doc-3",
-    documentTitle: "Hướng dẫn sử dụng CRM",
+    documentTitle: "Hﾆｰ盻嬾g d蘯ｫn s盻ｭ d盻･ng CRM",
     version: "v1.5",
     previousVersion: "v1.4",
     department: "Sales",
     sensitivity_level: "internal",
-    submittedBy: "Trần Văn Nam",
+    submittedBy: "Tr蘯ｧn Vﾄハ Nam",
     submittedAt: "2024-01-12T09:00:00Z",
     status: "review",
     changesCount: 12,
@@ -59,12 +64,12 @@ const mockApprovals: ApprovalItem[] = [
   {
     id: "apr-2",
     documentId: "doc-4",
-    documentTitle: "Quy trình tuyển dụng",
+    documentTitle: "Quy trﾃｬnh tuy盻ハ d盻･ng",
     version: "v4.0-draft",
     previousVersion: "v3.2",
     department: "HR",
     sensitivity_level: "internal",
-    submittedBy: "Nguy�?n Th�? Mai",
+    submittedBy: "Nguy盻?n Th盻? Mai",
     submittedAt: "2024-01-14T16:00:00Z",
     status: "draft",
     changesCount: 28,
@@ -356,9 +361,9 @@ function ApprovalCard({
 
             <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
               <span>{item.department}</span>
-              <span>•</span>
+              <span>窶｢</span>
               <span>Submitted by {item.submittedBy}</span>
-              <span>•</span>
+              <span>窶｢</span>
               <span>{formatDate(item.submittedAt)}</span>
             </div>
 

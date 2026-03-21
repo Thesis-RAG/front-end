@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useRef, useMemo } from "react";
+import { toast } from "@/hooks/use-toast";
 
 import {
   Dialog,
@@ -80,8 +81,22 @@ export default function DocumentsPage() {
     SensitivityLevel | ""
   >("");
   const [uploadReviewLevel, setUploadReviewLevel] = useState<string>("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFileName, setSelectedFileName] = useState<string>("");
+  const [uploading, setUploading] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const fileVersionInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [uploadVersionDialogOpen, setUploadVersionDialogOpen] = useState(false);
+  const [uploadTargetDocument, setUploadTargetDocument] =
+    useState<Document | null>(null);
+  const [selectedVersionFile, setSelectedVersionFile] = useState<File | null>(
+    null,
+  );
+  const [selectedVersionFileName, setSelectedVersionFileName] =
+    useState<string>("");
+  const [uploadingVersion, setUploadingVersion] = useState(false);
 
   // Department options: lấy từ list hiện có (mock) cho nhanh
   const departmentOptions = useMemo(() => {
@@ -190,6 +205,8 @@ export default function DocumentsPage() {
               <SelectItem value="public">Public</SelectItem>
               <SelectItem value="internal">Internal</SelectItem>
               <SelectItem value="confidential">Confidential</SelectItem>
+              <SelectItem value="restricted">Restricted</SelectItem>
+              <SelectItem value="top_secret">Top Secret</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -284,7 +301,14 @@ export default function DocumentsPage() {
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Edit Metadata
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setUploadTargetDocument(doc);
+                                  setSelectedVersionFile(null);
+                                  setSelectedVersionFileName("");
+                                  setUploadVersionDialogOpen(true);
+                                }}
+                              >
                                 <Upload className="mr-2 h-4 w-4" />
                                 Upload New Version
                               </DropdownMenuItem>
@@ -319,37 +343,26 @@ export default function DocumentsPage() {
         type="file"
         className="hidden"
         // accept=".pdf,.doc,.docx,.xlsx,.ppt,.pptx"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null;
           if (!file) return;
 
-          console.log("Token: ", token);
+          setSelectedFile(file);
+          setSelectedFileName(file.name);
+          // don't upload here; wait for Continue
+          // keep input value so user can re-open and change if needed
+        }}
+      />
+      <input
+        ref={fileVersionInputRef}
+        type="file"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0] ?? null;
+          if (!file) return;
 
-          const document = await createDocument(
-            {
-              title: "Salary Policy 2026",
-              description: "Chính sách lương nội bộ",
-              department_id: "finance",
-              project_id: "ERP_upgrade",
-              document_type: "policy",
-              sensitivity_level: "confidential",
-              data_type: "salary",
-              allowed_roles: [
-                "department_manager",
-                "knowledge_manager",
-                "admin",
-              ],
-            },
-            token,
-          );
-
-          await uploadDocumentVersion(document.id, file!, token);
-
-          // đóng dialog sau khi chọn file
-          setUploadDialogOpen(false);
-
-          // reset input để có thể chọn lại cùng 1 file lần sau
-          e.currentTarget.value = "";
+          setSelectedVersionFile(file);
+          setSelectedVersionFileName(file.name);
         }}
       />
       <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
@@ -396,10 +409,13 @@ export default function DocumentsPage() {
                   <SelectItem value="public">Public</SelectItem>
                   <SelectItem value="internal">Internal</SelectItem>
                   <SelectItem value="confidential">Confidential</SelectItem>
+                  <SelectItem value="restricted">Restriected</SelectItem>
+                  <SelectItem value="top_secret">Top secret</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
+            {/* TODO: reviewer is needed? */}
             <div className="grid gap-2">
               <Label>Reviewer</Label>
               <Select
@@ -420,6 +436,21 @@ export default function DocumentsPage() {
             </div>
           </div>
 
+          <div className="mt-2">
+            <Label>File</Label>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Choose file
+              </Button>
+              <div className="text-sm text-muted-foreground">
+                {selectedFileName || "No file chosen"}
+              </div>
+            </div>
+          </div>
+
           <DialogFooter>
             <Button
               variant="outline"
@@ -429,13 +460,154 @@ export default function DocumentsPage() {
             </Button>
 
             <Button
-              disabled={!canContinueUpload}
-              onClick={() => {
-                // mở file picker sau khi đã chọn đủ metadata
-                fileInputRef.current?.click();
+              disabled={!canContinueUpload || !selectedFile || uploading}
+              onClick={async () => {
+                if (!selectedFile) return;
+                setUploading(true);
+                try {
+                  const title = selectedFileName
+                    ? selectedFileName.replace(/\.[^.]+$/, "")
+                    : "Untitled document";
+
+                  const document = await createDocument(
+                    {
+                      title,
+                      description: "",
+                      department_id: "57b255b6-f4b4-455f-9067-fe9c55f1e3bf",
+                      // TODO: call department in db UploadDepartment.id
+                      project_id: undefined,
+                      document_type: "general",
+                      sensitivity_level: uploadSensitivityLevel || undefined,
+                      data_type: "file",
+                    },
+                    token,
+                  );
+
+                  await uploadDocumentVersion(document.id, selectedFile, token);
+
+                  toast({
+                    variant: "success",
+                    title: "Upload successful",
+                    description: `${selectedFileName} uploaded successfully`,
+                  });
+
+                  // reset
+                  setSelectedFile(null);
+                  setSelectedFileName("");
+                  setUploadDepartment("");
+                  setUploadSensitivityLevel("");
+                  setUploadReviewLevel("");
+                  setUploadDialogOpen(false);
+                } catch (err: any) {
+                  toast({
+                    variant: "destructive",
+                    title: "Upload failed",
+                    description: err?.message || "Unable to upload file",
+                  });
+                } finally {
+                  setUploading(false);
+                  // reset hidden input value so re-selection of same file works
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }
               }}
             >
-              Continue
+              {uploading ? "Uploading..." : "Continue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload New Version Dialog */}
+      <Dialog
+        open={uploadVersionDialogOpen}
+        onOpenChange={setUploadVersionDialogOpen}
+      >
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle>Upload new version</DialogTitle>
+            <DialogDescription>
+              Upload a new version for the selected document.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-4 py-2">
+            {uploadTargetDocument && (
+              <div className="grid gap-2">
+                <Label>Document</Label>
+                <div className="rounded-md border p-3 bg-background">
+                  <div className="font-medium">
+                    {uploadTargetDocument.title}
+                  </div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Current version: {uploadTargetDocument.currentVersion} ·{" "}
+                    {uploadTargetDocument.ownerDepartment}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-2">
+              <Label>File</Label>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => fileVersionInputRef.current?.click()}
+                >
+                  Choose file
+                </Button>
+                <div className="text-sm text-muted-foreground">
+                  {selectedVersionFileName || "No file chosen"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setUploadVersionDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              disabled={!selectedVersionFile || uploadingVersion}
+              onClick={async () => {
+                if (!uploadTargetDocument || !selectedVersionFile) return;
+                setUploadingVersion(true);
+                try {
+                  await uploadDocumentVersion(
+                    "947a608c-cde2-4d23-b7a5-dc6d8400cbb0",
+                    // TODO: change to uploadTargetDocument.id
+                    selectedVersionFile,
+                    token,
+                  );
+
+                  toast({
+                    variant: "success",
+                    title: "Upload successful",
+                    description: `${selectedVersionFileName} uploaded`,
+                  });
+
+                  // reset
+                  setSelectedVersionFile(null);
+                  setSelectedVersionFileName("");
+                  setUploadTargetDocument(null);
+                  setUploadVersionDialogOpen(false);
+                } catch (err: any) {
+                  toast({
+                    variant: "destructive",
+                    title: "Upload failed",
+                    description: err?.message || "Unable to upload file",
+                  });
+                } finally {
+                  setUploadingVersion(false);
+                  if (fileVersionInputRef.current)
+                    fileVersionInputRef.current.value = "";
+                }
+              }}
+            >
+              {uploadingVersion ? "Uploading..." : "Continue"}
             </Button>
           </DialogFooter>
         </DialogContent>

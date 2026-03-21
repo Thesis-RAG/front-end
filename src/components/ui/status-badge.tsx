@@ -70,6 +70,16 @@ const sensitivityLevelConfig: Record<
     className:
       "bg-sensitivity_level-confidential/15 text-sensitivity_level-confidential border-sensitivity_level-confidential/30",
   },
+  restricted: {
+    label: "Restricted",
+    className:
+      "bg-sensitivity_level-restricted/15 text-sensitivity_level-restricted border-sensitivity_level-restricted/30",
+  },
+  top_secret: {
+    label: "Top Secret",
+    className:
+      "bg-sensitivity_level-top_secret/15 text-sensitivity_level-top_secret border-sensitivity_level-top_secret/30",
+  },
 };
 
 export function SensitivityLevelBadge({

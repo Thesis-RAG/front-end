@@ -9,7 +9,12 @@ export type UserRole =
 export type DocumentStatus = "draft" | "review" | "approved" | "archived";
 
 // Sensitivity levels
-export type SensitivityLevel = "public" | "internal" | "confidential";
+export type SensitivityLevel =
+  | "public"
+  | "internal"
+  | "confidential"
+  | "restricted"
+  | "top_secret";
 
 // User type
 export interface User {

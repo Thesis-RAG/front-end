@@ -64,7 +64,9 @@
     /* sensitivity_level colors */
     --sensitivity_level-public: 142 71% 45%;
     --sensitivity_level-internal: 221 83% 53%;
-    --sensitivity_level-confidential: 0 84% 60%;
+    --sensitivity_level-confidential: 10 85% 55%;
+    --sensitivity_level-restricted: 0 85% 45%;
+    --sensitivity_level-top_secret: 300 70% 35%;
 
     /* Citation highlight */
     --citation-bg: 48 96% 89%;

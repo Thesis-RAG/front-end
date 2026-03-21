@@ -1,4 +1,4 @@
-# Welcome to your Knowledge-Navigator
+# Welcome to our KnowledgeHub
 
 ## Use your preferred IDE
 
@@ -7,10 +7,7 @@ The only requirement is having Node.js & npm installed - [install with nvm](http
 Follow these steps:
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone https://github.com/MyTruong28022004/knowledge-navigator.git
-
-# Step 2: Install the necessary dependencies.
+# Step 1: Install the necessary dependencies.
 npm i
 
 # Step 3: Start the development server with auto-reloading and an instant preview.

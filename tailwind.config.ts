@@ -76,6 +76,8 @@ export default {
           public: "hsl(var(--sensitivity_level-public))",
           internal: "hsl(var(--sensitivity_level-internal))",
           confidential: "hsl(var(--sensitivity_level-confidential))",
+          restricted: "hsl(var(--sensitivity_level-restricted))",
+          top_secret: "hsl(var(--sensitivity_level-top_secret))",
         },
         citation: {
           bg: "hsl(var(--citation-bg))",
