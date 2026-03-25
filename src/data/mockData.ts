@@ -39,28 +39,28 @@ export const mockConversations: Conversation[] = [
   },
 ];
 
-export const mockCitations: Citation[] = [
-  {
-    id: "cit-1",
-    documentId: "doc-1",
-    documentTitle: "Quy trình nghỉ phép năm 2024",
-    versionId: "ver-1",
-    sectionPath: "Section 2.1 > Đăng ký nghỉ phép",
-    snippet:
-      "Nhân viên cần đăng ký nghỉ phép trước ít nhất 3 ngày làm việc thông qua hệ thống HR Portal. Đối với nghỉ phép trên 5 ngày, cần được sự phê duyệt của Trưởng phòng.",
-    score: 0.92,
-  },
-  {
-    id: "cit-2",
-    documentId: "doc-2",
-    documentTitle: "Chính sách nhân sự 2024",
-    versionId: "ver-2",
-    sectionPath: "Chapter 4 > Nghỉ phép",
-    snippet:
-      "Mỗi nhân viên chính thức được hưởng 12 ngày phép năm. Ngày phép không sử dụng có thể được chuyển sang năm sau với tối đa 5 ngày.",
-    score: 0.87,
-  },
-];
+// export const mockCitations: Citation[] = [
+//   {
+//     id: "cit-1",
+//     documentId: "doc-1",
+//     documentTitle: "Quy trình nghỉ phép năm 2024",
+//     versionId: "ver-1",
+//     sectionPath: "Section 2.1 > Đăng ký nghỉ phép",
+//     snippet:
+//       "Nhân viên cần đăng ký nghỉ phép trước ít nhất 3 ngày làm việc thông qua hệ thống HR Portal. Đối với nghỉ phép trên 5 ngày, cần được sự phê duyệt của Trưởng phòng.",
+//     score: 0.92,
+//   },
+//   {
+//     id: "cit-2",
+//     documentId: "doc-2",
+//     documentTitle: "Chính sách nhân sự 2024",
+//     versionId: "ver-2",
+//     sectionPath: "Chapter 4 > Nghỉ phép",
+//     snippet:
+//       "Mỗi nhân viên chính thức được hưởng 12 ngày phép năm. Ngày phép không sử dụng có thể được chuyển sang năm sau với tối đa 5 ngày.",
+//     score: 0.87,
+//   },
+// ];
 
 export const mockMessages: ChatMessage[] = [
   {

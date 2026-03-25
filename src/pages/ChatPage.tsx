@@ -4,7 +4,7 @@ import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { CitationsPanel } from "@/components/chat/CitationsPanel";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { mockMessages } from "@/data/mockData";
+// import { mockMessages } from "@/data/mockData";
 import {
   Conversation,
   ChatMessage as ChatMessageType,
@@ -103,7 +103,7 @@ export default function ChatPage() {
   const [activeConversationId, setActiveConversationId] = useState<
     string | undefined
   >(undefined);
-  const [messages, setMessages] = useState<ChatMessageType[]>(mockMessages);
+  const [messages, setMessages] = useState<ChatMessageType[]>([]);
   // messages are loaded when activeConversationId is set (see useEffect above)
   const [selectedCitation, setSelectedCitation] = useState<Citation | null>(
     null,
@@ -161,14 +161,51 @@ export default function ChatPage() {
   };
 
   const handleDeleteConversation = async (id: string) => {
-    const result = await deleteConversation(id, token);
-    setConversations(conversations.filter((c) => c.id !== id));
-    if (activeConversationId === id) {
-      setActiveConversationId(conversations[0]?.id);
+    await deleteConversation(id, token);
+
+    const remainingConversations = conversations.filter((c) => c.id !== id);
+    setConversations(remainingConversations);
+
+    const isDeletingActive = activeConversationId === id;
+
+    if (isDeletingActive) {
+      const nextActiveId = remainingConversations[0]?.id;
+      setActiveConversationId(nextActiveId);
+      setSelectedCitation(null);
+
+      if (nextActiveId) {
+        await handleGetConversationMessage(nextActiveId);
+      } else {
+        setMessages([]);
+      }
     }
   };
 
   const handleSendMessage = async (content: string) => {
+    let conversationId = activeConversationId;
+
+    // N?u ch?a c? conversation n?o th? t?o m?i tr??c
+    if (!conversationId) {
+      const result = await createConversation(
+        {
+          title: "New conversation",
+        },
+        token,
+      );
+
+      const newConv: Conversation = {
+        id: result.id,
+        title: result.title,
+        createdAt: result.created_at,
+        updatedAt: result.updated_at,
+        messageCount: 0,
+      };
+
+      setConversations((prev) => [newConv, ...prev]);
+      setActiveConversationId(newConv.id);
+      conversationId = newConv.id;
+    }
+
     const tempUserId = `user-${Date.now()}`;
     const tempAssistantId = `assistant-${Date.now()}`;
 
@@ -182,16 +219,17 @@ export default function ChatPage() {
     const loadingMessage: ChatMessageType = {
       id: tempAssistantId,
       role: "assistant",
-      content: "...",
+      content: "",
       timestamp: new Date().toISOString(),
       isStreaming: true,
+      status: "loading",
     };
 
     setMessages((prev) => [...prev, userMessage, loadingMessage]);
     setIsStreaming(true);
 
     try {
-      const result = await postMessage(activeConversationId, content, token);
+      const result = await postMessage(conversationId, content, token);
 
       setMessages((prev) =>
         prev.map((m) =>
@@ -214,7 +252,7 @@ export default function ChatPage() {
           m.id === tempAssistantId
             ? {
                 ...m,
-                content: "Error respone from API.",
+                content: "Error response from API.",
                 isStreaming: false,
                 status: "error",
               }

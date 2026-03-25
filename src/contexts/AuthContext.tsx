@@ -1,7 +1,14 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
 import { User, UserRole } from "@/types";
 
 import { auth } from "@/services/auth.api";
+import { getAllUsers } from "@/services/users.api";
 
 interface AuthContextType {
   user: User | null;
@@ -15,70 +22,87 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for different roles
-const mockUsers: Record<UserRole, User> = {
-  employee: {
-    id: "1460b8b2-4c03-4975-87db-9e54614b3155",
-    name: "Nguyễn Văn An",
-    email: "an.nguyen@company.com",
-    role: "employee",
-    department: "Engineering",
-    avatar: undefined,
-  },
-  department_manager: {
-    id: "628adea5-e221-427e-a3ab-182bc4ab0005",
-    name: "Trần Thị Bình",
-    email: "binh.tran@company.com",
-    role: "department_manager",
-    department: "Engineering",
-    avatar: undefined,
-  },
-  director: {
-    id: "67bccecf-cbd9-482f-ae82-16682ebae5f8",
-    name: "Lê Văn Cường",
-    email: "cuong.le@company.com",
-    role: "director",
-    department: "Knowledge Management",
-    avatar: undefined,
-  },
-  admin_auditor: {
-    id: "fc14c87f-2feb-45b8-890a-1bfd15b79bbf",
-    name: "Phạm Thị Dung",
-    email: "dung.pham@company.com",
-    role: "admin_auditor",
-    department: "IT Administration",
-    avatar: undefined,
-  },
+type ApiUser = {
+  id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  clearance_level: string;
+  department_id: string;
+  status: string;
 };
 
-// Role hierarchy for permission checking
-const roleHierarchy: Record<UserRole, number> = {
-  employee: 1,
-  department_manager: 2,
-  director: 3,
-  admin_auditor: 4,
+const roleToDepartment: Record<UserRole, string> = {
+  employee: "Engineering",
+  department_manager: "Engineering",
+  director: "Knowledge Management",
+  admin_auditor: "IT Administration",
 };
+
+function mapApiUserToUser(apiUser: ApiUser): User {
+  return {
+    id: apiUser.id,
+    name: apiUser.name,
+    email: apiUser.email,
+    role: apiUser.role,
+    department: roleToDepartment[apiUser.role],
+    avatar: undefined,
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [usersByRole, setUsersByRole] = useState<
+    Partial<Record<UserRole, User>>
+  >({});
+
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const result: ApiUser[] = await getAllUsers();
+
+        const mappedUsers = result.reduce(
+          (acc, apiUser) => {
+            acc[apiUser.role] = mapApiUserToUser(apiUser);
+            return acc;
+          },
+          {} as Partial<Record<UserRole, User>>,
+        );
+
+        setUsersByRole(mappedUsers);
+      } catch (err) {
+        console.error("Failed to load users:", err);
+      }
+    };
+
+    loadUsers();
+  }, []);
 
   const isAuthenticated = user !== null;
 
-  const login = useCallback(async (role: UserRole) => {
-    try {
-      const user = mockUsers[role];
-      setUser(user);
+  const login = useCallback(
+    async (role: UserRole = "employee") => {
+      try {
+        const selectedUser = usersByRole[role];
 
-      const res = await auth({
-        email: user.email,
-      });
+        if (!selectedUser) {
+          throw new Error(`User with role "${role}" not found`);
+        }
 
-      setToken(res.access_token);
-    } catch (err) {
-      console.error(err);
-    }
-  }, []);
+        setUser(selectedUser);
+
+        const res = await auth({
+          email: selectedUser.email,
+        });
+
+        setToken(res.access_token);
+      } catch (err) {
+        console.error(err);
+      }
+    },
+    [usersByRole],
+  );
 
   const logout = useCallback(() => {
     setUser(null);

@@ -90,9 +90,7 @@ export function ChatMessage({
     <div
       className={cn(
         "flex gap-4 px-4 py-6",
-        isUser
-          ? "flex-row-reverse items-end bg-muted/30"
-          : "items-start bg-background",
+        isUser ? "flex-row-reverse items-end" : "items-start",
       )}
     >
       <Avatar className="h-8 w-8 shrink-0">
@@ -108,24 +106,33 @@ export function ChatMessage({
         </AvatarFallback>
       </Avatar>
 
-      <div className="flex-1 min-w-0">
-        <div className={cn("text-sm leading-relaxed", isUser && "text-right")}>
-          {message.content}
-          {message.isStreaming && (
-            <span className="inline-flex ml-1">
-              <span className="animate-pulse-dot">●</span>
-            </span>
+      <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            "w-fit max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words",
+            isUser
+              ? "ml-auto bg-gray-100 text-gray-900"
+              : "bg-background text-gray-900",
+          )}
+        >
+          {message.isStreaming ? (
+            <div className="mt-3 flex translate-y-1 items-center gap-2">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" />
+            </div>
+          ) : (
+            <div>{message.content}</div>
           )}
         </div>
 
         {renderStatusMessage()}
 
-        {/* Citations */}
         {message.citations && message.citations.length > 0 && (
           <div className="mt-4">
             <p
               className={cn(
-                "text-xs font-medium text-muted-foreground mb-2",
+                "mb-2 text-xs font-medium text-muted-foreground",
                 isUser && "text-right",
               )}
             >
@@ -138,12 +145,12 @@ export function ChatMessage({
                 <button
                   key={citation.id}
                   onClick={() => onCitationClick(citation)}
-                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs hover:bg-accent transition-colors"
+                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
                 >
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
                     {index + 1}
                   </span>
-                  <span className="truncate max-w-[180px]">
+                  <span className="max-w-[180px] truncate">
                     {citation.documentTitle}
                   </span>
                   <ExternalLink className="h-3 w-3 text-muted-foreground" />
@@ -153,7 +160,6 @@ export function ChatMessage({
           </div>
         )}
 
-        {/* Actions for assistant messages */}
         {!isUser && !message.isStreaming && (
           <div className="mt-4 flex items-center gap-2">
             <Tooltip>
@@ -233,7 +239,6 @@ export function ChatMessage({
           </div>
         )}
 
-        {/* Trace info */}
         {showTrace && message.traceId && (
           <div
             className={cn(

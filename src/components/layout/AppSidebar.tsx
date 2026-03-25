@@ -163,7 +163,7 @@ export function AppSidebar() {
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
+              {/* <DropdownMenuItem
                 className="text-xs text-muted-foreground"
                 disabled
               >
@@ -178,7 +178,7 @@ export function AppSidebar() {
                   <Shield className="mr-2 h-4 w-4" />
                   {roleLabels[role]}
                 </DropdownMenuItem>
-              ))}
+              ))} */}
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={logout}

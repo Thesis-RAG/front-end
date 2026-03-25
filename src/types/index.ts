@@ -58,7 +58,7 @@ export interface ChatMessage {
   timestamp: string;
   citations?: Citation[];
   traceId?: string;
-  status?: "success" | "no-answer" | "no-permission" | "error";
+  status?: "success" | "no-answer" | "no-permission" | "error" | "loading";
   isStreaming?: boolean;
 }
 

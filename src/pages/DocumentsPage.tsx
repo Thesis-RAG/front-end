@@ -473,7 +473,7 @@ export default function DocumentsPage() {
                     {
                       title,
                       description: "",
-                      department_id: "3f1bdff2-a1c5-4aa9-8468-1ce831e7259d",
+                      department_id: "94e911dd-3298-449b-8021-daa2e43d0ea0",
                       // TODO: call department in db UploadDepartment.id
                       project_id: undefined,
                       document_type: "general",
