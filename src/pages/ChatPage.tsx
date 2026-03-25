@@ -1,39 +1,140 @@
-import { useState, useRef, useEffect } from 'react';
-import { ChatSidebar } from '@/components/chat/ChatSidebar';
-import { ChatMessage } from '@/components/chat/ChatMessage';
-import { ChatInput } from '@/components/chat/ChatInput';
-import { CitationsPanel } from '@/components/chat/CitationsPanel';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { mockConversations, mockMessages, mockCitations } from '@/data/mockData';
-import { Conversation, ChatMessage as ChatMessageType, Citation } from '@/types';
-import { MessageSquare } from 'lucide-react';
+import { useState, useRef, useEffect } from "react";
+import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import { ChatMessage } from "@/components/chat/ChatMessage";
+import { ChatInput } from "@/components/chat/ChatInput";
+import { CitationsPanel } from "@/components/chat/CitationsPanel";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { mockMessages } from "@/data/mockData";
+import {
+  Conversation,
+  ChatMessage as ChatMessageType,
+  Citation,
+} from "@/types";
+import { MessageSquare } from "lucide-react";
+import {
+  createConversation,
+  postMessage,
+  getListConversation,
+  getListConversationMessage,
+  updateConversation,
+  deleteConversation,
+} from "@/services/chat.api";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function ChatPage() {
-  const [conversations, setConversations] = useState<Conversation[]>(mockConversations);
-  const [activeConversationId, setActiveConversationId] = useState<string | undefined>(
-    conversations[0]?.id
-  );
+  const { token, user } = useAuth();
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+
+  const handleGetConversation = async (userId: string) => {
+    const result = await getListConversation(userId, token);
+
+    return result.map((item: any) => ({
+      id: item.id,
+      title: item.title,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
+      messageCount: 0,
+    }));
+  };
+
+  const handleGetConversationMessage = async (conversationId?: string) => {
+    if (!conversationId) return;
+    // fetch messages for a conversation
+    const result = await getListConversationMessage(conversationId, token);
+
+    // Map API response to ChatMessageType[]
+    const mapped: ChatMessageType[] = result
+      .flatMap((item: any) => {
+        const userMsg: ChatMessageType = {
+          id: item.messageId,
+          role: "user",
+          content: item.content,
+          timestamp: item.createdAt,
+        };
+
+        const assistant = item.assistantMessage;
+        const assistantMsg: ChatMessageType = {
+          id: assistant?.id ?? `${item.messageId}-assistant`,
+          role: "assistant",
+          content: assistant?.content ?? "",
+          timestamp: assistant?.createdAt ?? item.createdAt,
+          citations: (item.sources || []).map((s: any, idx: number) => ({
+            id: s.documentId + (s.versionId || "") + idx,
+            documentId: s.documentId,
+            documentTitle: s.documentTitle || s.documentId,
+            versionId: s.versionId || "",
+            sectionPath: s.sectionPath ?? "",
+            excerpt: s.excerpt ?? "",
+            surroundingContext: s.surroundingContext ?? "",
+            relevance: s.relevance,
+          })),
+          traceId: item.traceId,
+          status: "success",
+        };
+
+        return [userMsg, assistantMsg];
+      })
+      // sort chronologically (oldest first)
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      );
+
+    setMessages(mapped);
+    return mapped;
+  };
+
+  useEffect(() => {
+    const load = async () => {
+      const list = await handleGetConversation(user.id);
+      setConversations(list);
+      // set first conversation as active and load its messages
+      if (list.length) {
+        setActiveConversationId(list[0].id);
+        await handleGetConversationMessage(list[0].id);
+      }
+    };
+
+    load();
+    // only run on mount / when user or token changes
+  }, [user.id, token]);
+
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | undefined
+  >(undefined);
   const [messages, setMessages] = useState<ChatMessageType[]>(mockMessages);
-  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(null);
+  // messages are loaded when activeConversationId is set (see useEffect above)
+  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(
+    null,
+  );
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  const handleNewConversation = () => {
+  const handleNewConversation = async () => {
+    const result = await createConversation(
+      {
+        title: "New conversation",
+      },
+      token,
+    );
+
     const newConv: Conversation = {
-      id: `conv-${Date.now()}`,
-      title: 'New conversation',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      id: result.id,
+      title: result.title,
+      createdAt: result.created_at,
+      updatedAt: result.updated_at,
       messageCount: 0,
     };
+
     setConversations([newConv, ...conversations]);
     setActiveConversationId(newConv.id);
     setMessages([]);
@@ -41,22 +142,26 @@ export default function ChatPage() {
 
   const handleSelectConversation = (id: string) => {
     setActiveConversationId(id);
-    // In real app, load messages for this conversation
-    if (id === mockConversations[0]?.id) {
-      setMessages(mockMessages);
-    } else {
-      setMessages([]);
-    }
+    // load messages for selected conversation
+    handleGetConversationMessage(id);
     setSelectedCitation(null);
   };
 
-  const handleRenameConversation = (id: string, title: string) => {
+  const handleRenameConversation = async (id: string, title: string) => {
+    const result = await updateConversation(
+      activeConversationId,
+      {
+        title: title,
+      },
+      token,
+    );
     setConversations(
-      conversations.map((c) => (c.id === id ? { ...c, title } : c))
+      conversations.map((c) => (c.id === id ? { ...c, title } : c)),
     );
   };
 
-  const handleDeleteConversation = (id: string) => {
+  const handleDeleteConversation = async (id: string) => {
+    const result = await deleteConversation(id, token);
     setConversations(conversations.filter((c) => c.id !== id));
     if (activeConversationId === id) {
       setActiveConversationId(conversations[0]?.id);
@@ -64,61 +169,67 @@ export default function ChatPage() {
   };
 
   const handleSendMessage = async (content: string) => {
-    // Add user message
+    const tempUserId = `user-${Date.now()}`;
+    const tempAssistantId = `assistant-${Date.now()}`;
+
     const userMessage: ChatMessageType = {
-      id: `msg-${Date.now()}`,
-      role: 'user',
+      id: tempUserId,
+      role: "user",
       content,
       timestamp: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMessage]);
 
-    // Simulate streaming response
-    setIsStreaming(true);
-    const assistantMessage: ChatMessageType = {
-      id: `msg-${Date.now() + 1}`,
-      role: 'assistant',
-      content: '',
+    const loadingMessage: ChatMessageType = {
+      id: tempAssistantId,
+      role: "assistant",
+      content: "...",
       timestamp: new Date().toISOString(),
       isStreaming: true,
     };
-    setMessages((prev) => [...prev, assistantMessage]);
 
-    // Simulate streaming text
-    const responseText = `Dựa trên tài liệu trong cơ sở tri thức, đây là câu trả lời cho câu hỏi của bạn:\n\n${content.length > 20 ? 'Tôi đã tìm thấy một số thông tin liên quan đến yêu cầu của bạn. Vui lòng xem các trích dẫn bên dưới để biết thêm chi tiết.' : 'Vui lòng cung cấp thêm thông tin để tôi có thể hỗ trợ bạn tốt hơn.'}`;
+    setMessages((prev) => [...prev, userMessage, loadingMessage]);
+    setIsStreaming(true);
 
-    let currentText = '';
-    for (let i = 0; i < responseText.length; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      currentText += responseText[i];
+    try {
+      const result = await postMessage(activeConversationId, content, token);
+
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === assistantMessage.id ? { ...m, content: currentText } : m
-        )
+          m.id === tempAssistantId
+            ? {
+                ...m,
+                content: result.assistantMessage.content,
+                isStreaming: false,
+                citations: result.sources,
+                traceId: result.traceId.toString(36),
+                status: "success",
+                timestamp: result.assistantMessage.createdAt,
+              }
+            : m,
+        ),
       );
+    } catch (error) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempAssistantId
+            ? {
+                ...m,
+                content: "Error respone from API.",
+                isStreaming: false,
+                status: "error",
+              }
+            : m,
+        ),
+      );
+    } finally {
+      setIsStreaming(false);
     }
-
-    // Complete the message
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.id === assistantMessage.id
-          ? {
-              ...m,
-              isStreaming: false,
-              citations: mockCitations,
-              traceId: `trace-${Date.now().toString(36)}`,
-              status: 'success' as const,
-            }
-          : m
-      )
-    );
-    setIsStreaming(false);
   };
 
   const handleStopStreaming = () => {
     setIsStreaming(false);
     setMessages((prev) =>
-      prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m))
+      prev.map((m) => (m.isStreaming ? { ...m, isStreaming: false } : m)),
     );
   };
 
@@ -127,8 +238,8 @@ export default function ChatPage() {
   };
 
   const handleFeedback = (messageId: string, helpful: boolean) => {
-    console.log('Feedback:', { messageId, helpful });
-    // In real app, send to backend
+    console.log("Feedback:", { messageId, helpful });
+    //TODO: In real app, send to backend
   };
 
   return (
@@ -153,8 +264,9 @@ export default function ChatPage() {
             </div>
             <h2 className="mt-4 text-xl font-semibold">Chat Assistant</h2>
             <p className="mt-2 max-w-md text-center text-muted-foreground">
-              Ask questions about processes, policies, and enterprise knowledge. 
-              I will answer based on approved documents and provide source citations.
+              Ask questions about processes, policies, and enterprise knowledge.
+              I will answer based on approved documents and provide source
+              citations.
             </p>
           </div>
         ) : (

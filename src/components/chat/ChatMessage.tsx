@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   ThumbsUp,
   ThumbsDown,
@@ -9,16 +9,16 @@ import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { ChatMessage as ChatMessageType, Citation } from '@/types';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ChatMessage as ChatMessageType, Citation } from "@/types";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
+} from "@/components/ui/tooltip";
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -26,12 +26,16 @@ interface ChatMessageProps {
   onFeedback: (messageId: string, helpful: boolean) => void;
 }
 
-export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessageProps) {
+export function ChatMessage({
+  message,
+  onCitationClick,
+  onFeedback,
+}: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [feedbackGiven, setFeedbackGiven] = useState<boolean | null>(null);
 
-  const isUser = message.role === 'user';
+  const isUser = message.role === "user";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
@@ -45,28 +49,34 @@ export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessag
   };
 
   const renderStatusMessage = () => {
-    if (message.status === 'no-answer') {
+    if (message.status === "no-answer") {
       return (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-status-draft/30 bg-status-draft/10 p-3">
           <AlertTriangle className="h-5 w-5 shrink-0 text-status-draft" />
           <div className="text-sm">
-            <p className="font-medium text-status-draft">Không tìm thấy nguồn phù hợp</p>
+            <p className="font-medium text-status-draft">
+              Không tìm thấy nguồn phù hợp
+            </p>
             <p className="mt-1 text-muted-foreground">
-              Thử hỏi cụ thể hơn, sử dụng từ khóa liên quan hoặc chọn phòng ban/loại tài liệu phù hợp.
+              Thử hỏi cụ thể hơn, sử dụng từ khóa liên quan hoặc chọn phòng
+              ban/loại tài liệu phù hợp.
             </p>
           </div>
         </div>
       );
     }
 
-    if (message.status === 'no-permission') {
+    if (message.status === "no-permission") {
       return (
         <div className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
           <ShieldX className="h-5 w-5 shrink-0 text-destructive" />
           <div className="text-sm">
-            <p className="font-medium text-destructive">Không đủ quyền truy cập</p>
+            <p className="font-medium text-destructive">
+              Không đủ quyền truy cập
+            </p>
             <p className="mt-1 text-muted-foreground">
-              Bạn không có quyền truy cập vào các tài liệu liên quan. Liên hệ quản trị viên nếu cần.
+              Bạn không có quyền truy cập vào các tài liệu liên quan. Liên hệ
+              quản trị viên nếu cần.
             </p>
           </div>
         </div>
@@ -79,21 +89,27 @@ export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessag
   return (
     <div
       className={cn(
-        'flex gap-4 px-4 py-6',
-        isUser ? 'bg-muted/30' : 'bg-background'
+        "flex gap-4 px-4 py-6",
+        isUser
+          ? "flex-row-reverse items-end bg-muted/30"
+          : "items-start bg-background",
       )}
     >
       <Avatar className="h-8 w-8 shrink-0">
-        <AvatarFallback className={cn(
-          'text-xs',
-          isUser ? 'bg-primary text-primary-foreground' : 'bg-sidebar text-sidebar-foreground'
-        )}>
-          {isUser ? 'You' : 'AI'}
+        <AvatarFallback
+          className={cn(
+            "text-xs",
+            isUser
+              ? "bg-primary text-primary-foreground"
+              : "bg-sidebar text-sidebar-foreground",
+          )}
+        >
+          {isUser ? "You" : "AI"}
         </AvatarFallback>
       </Avatar>
 
       <div className="flex-1 min-w-0">
-        <div className="text-sm leading-relaxed">
+        <div className={cn("text-sm leading-relaxed", isUser && "text-right")}>
           {message.content}
           {message.isStreaming && (
             <span className="inline-flex ml-1">
@@ -107,10 +123,17 @@ export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessag
         {/* Citations */}
         {message.citations && message.citations.length > 0 && (
           <div className="mt-4">
-            <p className="text-xs font-medium text-muted-foreground mb-2">
+            <p
+              className={cn(
+                "text-xs font-medium text-muted-foreground mb-2",
+                isUser && "text-right",
+              )}
+            >
               Sources ({message.citations.length})
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div
+              className={cn("flex flex-wrap gap-2", isUser && "justify-end")}
+            >
               {message.citations.map((citation, index) => (
                 <button
                   key={citation.id}
@@ -120,7 +143,9 @@ export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessag
                   <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-medium">
                     {index + 1}
                   </span>
-                  <span className="truncate max-w-[180px]">{citation.documentTitle}</span>
+                  <span className="truncate max-w-[180px]">
+                    {citation.documentTitle}
+                  </span>
                   <ExternalLink className="h-3 w-3 text-muted-foreground" />
                 </button>
               ))}
@@ -133,8 +158,17 @@ export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessag
           <div className="mt-4 flex items-center gap-2">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 px-2" onClick={handleCopy}>
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2"
+                  onClick={handleCopy}
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Copy</TooltipContent>
@@ -147,7 +181,10 @@ export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessag
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={cn('h-8 px-2', feedbackGiven === true && 'text-status-approved')}
+                  className={cn(
+                    "h-8 px-2",
+                    feedbackGiven === true && "text-status-approved",
+                  )}
                   onClick={() => handleFeedback(true)}
                   disabled={feedbackGiven !== null}
                 >
@@ -162,7 +199,10 @@ export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessag
                 <Button
                   variant="ghost"
                   size="sm"
-                  className={cn('h-8 px-2', feedbackGiven === false && 'text-destructive')}
+                  className={cn(
+                    "h-8 px-2",
+                    feedbackGiven === false && "text-destructive",
+                  )}
                   onClick={() => handleFeedback(false)}
                   disabled={feedbackGiven !== null}
                 >
@@ -195,7 +235,12 @@ export function ChatMessage({ message, onCitationClick, onFeedback }: ChatMessag
 
         {/* Trace info */}
         {showTrace && message.traceId && (
-          <div className="mt-3 rounded-md border border-border bg-muted/50 p-3 text-xs animate-fade-in">
+          <div
+            className={cn(
+              "mt-3 rounded-md border border-border bg-muted/50 p-3 text-xs animate-fade-in",
+              isUser && "text-right",
+            )}
+          >
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Trace ID:</span>
               <div className="flex items-center gap-2">

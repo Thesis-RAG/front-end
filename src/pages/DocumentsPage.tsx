@@ -98,7 +98,7 @@ export default function DocumentsPage() {
     useState<string>("");
   const [uploadingVersion, setUploadingVersion] = useState(false);
 
-  // Department options: lấy từ list hiện có (mock) cho nhanh
+  // Department options: mock data
   const departmentOptions = useMemo(() => {
     const depts = Array.from(
       new Set(documents.map((d) => d.ownerDepartment)),
@@ -106,7 +106,7 @@ export default function DocumentsPage() {
     return depts.length ? depts : ["HR", "IT", "Finance", "Operations"];
   }, [documents]);
 
-  // Cấp review options: tuỳ business, tạm để 1..3
+  // Reviewer options: mock data
   const reviewLevelOptions = [
     "Director",
     "Administrator Auditor",
@@ -473,7 +473,7 @@ export default function DocumentsPage() {
                     {
                       title,
                       description: "",
-                      department_id: "57b255b6-f4b4-455f-9067-fe9c55f1e3bf",
+                      department_id: "3f1bdff2-a1c5-4aa9-8468-1ce831e7259d",
                       // TODO: call department in db UploadDepartment.id
                       project_id: undefined,
                       document_type: "general",
@@ -539,7 +539,7 @@ export default function DocumentsPage() {
                     {uploadTargetDocument.title}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    Current version: {uploadTargetDocument.currentVersion} ·{" "}
+                    Current version: {uploadTargetDocument.currentVersion} ﾂｷ{" "}
                     {uploadTargetDocument.ownerDepartment}
                   </div>
                 </div>
@@ -577,7 +577,7 @@ export default function DocumentsPage() {
                 setUploadingVersion(true);
                 try {
                   await uploadDocumentVersion(
-                    "947a608c-cde2-4d23-b7a5-dc6d8400cbb0",
+                    "5afd7ae8-a0eb-4859-bbfe-c9cdbebac7f0",
                     // TODO: change to uploadTargetDocument.id
                     selectedVersionFile,
                     token,

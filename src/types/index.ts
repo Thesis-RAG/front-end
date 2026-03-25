@@ -58,7 +58,7 @@ export interface ChatMessage {
   timestamp: string;
   citations?: Citation[];
   traceId?: string;
-  status?: "success" | "no-answer" | "no-permission";
+  status?: "success" | "no-answer" | "no-permission" | "error";
   isStreaming?: boolean;
 }
 
@@ -69,8 +69,9 @@ export interface Citation {
   documentTitle: string;
   versionId: string;
   sectionPath: string;
-  snippet: string;
-  score?: number;
+  excerpt: string;
+  surroundingContext: string;
+  relevance?: number;
 }
 
 // Chat conversation
