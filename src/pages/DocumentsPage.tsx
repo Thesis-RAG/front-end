@@ -117,6 +117,9 @@ export default function DocumentsPage() {
     !!uploadDepartment && !!uploadSensitivityLevel && !!uploadReviewLevel;
 
   const canEdit = hasPermission("documents.edit");
+  const hasLevelConfidential = hasPermission("documents.confidential");
+  const hasLevelRestricted = hasPermission("documents.restricted");
+  const hasLevelTopSecret = hasPermission("documents.top_secret");
 
   const filteredDocuments = documents.filter((doc) => {
     const matchesSearch =
@@ -175,21 +178,25 @@ export default function DocumentsPage() {
             />
           </div>
 
-          <Select
-            value={statusFilter}
-            onValueChange={(v) => setStatusFilter(v as DocumentStatus | "all")}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All statuses</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="review">In Review</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
+          {canEdit && (
+            <Select
+              value={statusFilter}
+              onValueChange={(v) =>
+                setStatusFilter(v as DocumentStatus | "all")
+              }
+            >
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="review">In Review</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
 
           <Select
             value={sensitivityLevelFilter}
@@ -204,9 +211,15 @@ export default function DocumentsPage() {
               <SelectItem value="all">All levels</SelectItem>
               <SelectItem value="public">Public</SelectItem>
               <SelectItem value="internal">Internal</SelectItem>
-              <SelectItem value="confidential">Confidential</SelectItem>
-              <SelectItem value="restricted">Restricted</SelectItem>
-              <SelectItem value="top_secret">Top Secret</SelectItem>
+              {hasLevelConfidential && (
+                <SelectItem value="confidential">Confidential</SelectItem>
+              )}
+              {hasLevelRestricted && (
+                <SelectItem value="restricted">Restriected</SelectItem>
+              )}
+              {hasLevelTopSecret && (
+                <SelectItem value="top_secret">Top secret</SelectItem>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -408,9 +421,15 @@ export default function DocumentsPage() {
                 <SelectContent>
                   <SelectItem value="public">Public</SelectItem>
                   <SelectItem value="internal">Internal</SelectItem>
-                  <SelectItem value="confidential">Confidential</SelectItem>
-                  <SelectItem value="restricted">Restriected</SelectItem>
-                  <SelectItem value="top_secret">Top secret</SelectItem>
+                  {hasLevelConfidential && (
+                    <SelectItem value="confidential">Confidential</SelectItem>
+                  )}
+                  {hasLevelRestricted && (
+                    <SelectItem value="restricted">Restriected</SelectItem>
+                  )}
+                  {hasLevelTopSecret && (
+                    <SelectItem value="top_secret">Top secret</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -473,7 +492,7 @@ export default function DocumentsPage() {
                     {
                       title,
                       description: "",
-                      department_id: "94e911dd-3298-449b-8021-daa2e43d0ea0",
+                      department_id: "ae4e0539-0362-488a-921e-c2abb4cb3ac0",
                       // TODO: call department in db UploadDepartment.id
                       project_id: undefined,
                       document_type: "general",

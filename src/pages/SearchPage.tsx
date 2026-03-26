@@ -37,6 +37,7 @@ import {
   SensitivityLevel,
 } from "@/types";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
@@ -44,6 +45,11 @@ export default function SearchPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const { token, hasPermission } = useAuth();
+  const canEdit = hasPermission("documents.edit");
+  const hasLevelConfidential = hasPermission("documents.confidential");
+  const hasLevelRestricted = hasPermission("documents.restricted");
+  const hasLevelTopSecret = hasPermission("documents.top_secret");
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | "all">(
@@ -149,26 +155,29 @@ export default function SearchPage() {
                   <SheetTitle>Search Filters</SheetTitle>
                 </SheetHeader>
                 <div className="mt-6 space-y-6">
-                  <div>
-                    <label className="text-sm font-medium">Status</label>
-                    <Select
-                      value={statusFilter}
-                      onValueChange={(v) =>
-                        setStatusFilter(v as DocumentStatus | "all")
-                      }
-                    >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="review">In Review</SelectItem>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {canEdit && (
+                    <div>
+                      <label className="text-sm font-medium">Status</label>
+
+                      <Select
+                        value={statusFilter}
+                        onValueChange={(v) =>
+                          setStatusFilter(v as DocumentStatus | "all")
+                        }
+                      >
+                        <SelectTrigger className="mt-2">
+                          <SelectValue placeholder="All statuses" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All statuses</SelectItem>
+                          <SelectItem value="approved">Approved</SelectItem>
+                          <SelectItem value="review">In Review</SelectItem>
+                          <SelectItem value="draft">Draft</SelectItem>
+                          <SelectItem value="archived">Archived</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div>
                     <label className="text-sm font-medium">
@@ -189,11 +198,19 @@ export default function SearchPage() {
                         </SelectItem>
                         <SelectItem value="public">Public</SelectItem>
                         <SelectItem value="internal">Internal</SelectItem>
-                        <SelectItem value="confidential">
-                          Confidential
-                        </SelectItem>
-                        <SelectItem value="restricted">Restricted</SelectItem>
-                        <SelectItem value="top_secret">Top Secret</SelectItem>
+                        {hasLevelConfidential && (
+                          <SelectItem value="confidential">
+                            Confidential
+                          </SelectItem>
+                        )}
+                        {hasLevelRestricted && (
+                          <SelectItem value="restricted">
+                            Restriected
+                          </SelectItem>
+                        )}
+                        {hasLevelTopSecret && (
+                          <SelectItem value="top_secret">Top secret</SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>

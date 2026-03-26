@@ -36,6 +36,7 @@ export function ChatMessage({
   const [feedbackGiven, setFeedbackGiven] = useState<boolean | null>(null);
 
   const isUser = message.role === "user";
+  const isNoAnswer = message.status === "no_answer";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
@@ -46,44 +47,6 @@ export function ChatMessage({
   const handleFeedback = (helpful: boolean) => {
     setFeedbackGiven(helpful);
     onFeedback(message.id, helpful);
-  };
-
-  const renderStatusMessage = () => {
-    if (message.status === "no-answer") {
-      return (
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-status-draft/30 bg-status-draft/10 p-3">
-          <AlertTriangle className="h-5 w-5 shrink-0 text-status-draft" />
-          <div className="text-sm">
-            <p className="font-medium text-status-draft">
-              Không tìm thấy nguồn phù hợp
-            </p>
-            <p className="mt-1 text-muted-foreground">
-              Thử hỏi cụ thể hơn, sử dụng từ khóa liên quan hoặc chọn phòng
-              ban/loại tài liệu phù hợp.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    if (message.status === "no-permission") {
-      return (
-        <div className="mt-3 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
-          <ShieldX className="h-5 w-5 shrink-0 text-destructive" />
-          <div className="text-sm">
-            <p className="font-medium text-destructive">
-              Không đủ quyền truy cập
-            </p>
-            <p className="mt-1 text-muted-foreground">
-              Bạn không có quyền truy cập vào các tài liệu liên quan. Liên hệ
-              quản trị viên nếu cần.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    return null;
   };
 
   return (
@@ -112,7 +75,9 @@ export function ChatMessage({
             "w-fit max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap break-words",
             isUser
               ? "ml-auto bg-gray-100 text-gray-900"
-              : "bg-background text-gray-900",
+              : isNoAnswer
+                ? "bg-yellow-50 text-gray-900"
+                : "bg-background text-gray-900",
           )}
         >
           {message.isStreaming ? (
@@ -125,8 +90,6 @@ export function ChatMessage({
             <div>{message.content}</div>
           )}
         </div>
-
-        {renderStatusMessage()}
 
         {message.citations && message.citations.length > 0 && (
           <div className="mt-4">

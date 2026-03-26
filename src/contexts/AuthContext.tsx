@@ -136,6 +136,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         "users.manage": ["admin_auditor"],
         "audit.view": ["director", "admin_auditor"],
         settings: ["director", "admin_auditor"],
+        "documents.confidential": [
+          "director",
+          "admin_auditor",
+          "department_manager",
+        ],
+        "documents.restricted": ["director", "admin_auditor"],
+        "documents.top_secret": ["admin_auditor"],
       };
 
       const allowedRoles = permissionRequirements[permission];

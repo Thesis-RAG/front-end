@@ -62,24 +62,24 @@ export const mockConversations: Conversation[] = [
 //   },
 // ];
 
-export const mockMessages: ChatMessage[] = [
-  {
-    id: "msg-1",
-    role: "user",
-    content: "Làm thế nào để đăng ký nghỉ phép?",
-    timestamp: "2024-01-15T10:30:00Z",
-  },
-  {
-    id: "msg-2",
-    role: "assistant",
-    content:
-      'Để đăng ký nghỉ phép, bạn cần thực hiện các bước sau:\n\n1. Đăng nhập vào HR Portal\n2. Chọn menu "Nghỉ phép" > "Đăng ký mới"\n3. Điền thông tin ngày bắt đầu, ngày kết thúc và lý do\n4. Nhấn "Gửi yêu cầu"\n\nLưu ý quan trọng:\n- Cần đăng ký trước ít nhất 3 ngày làm việc\n- Nghỉ phép trên 5 ngày cần sự phê duyệt của Trưởng phòng\n- Mỗi năm bạn được 12 ngày phép',
-    timestamp: "2024-01-15T10:30:15Z",
-    citations: mockCitations,
-    traceId: "trace-abc123def456",
-    status: "success",
-  },
-];
+// export const mockMessages: ChatMessage[] = [
+//   {
+//     id: "msg-1",
+//     role: "user",
+//     content: "Làm thế nào để đăng ký nghỉ phép?",
+//     timestamp: "2024-01-15T10:30:00Z",
+//   },
+//   {
+//     id: "msg-2",
+//     role: "assistant",
+//     content:
+//       'Để đăng ký nghỉ phép, bạn cần thực hiện các bước sau:\n\n1. Đăng nhập vào HR Portal\n2. Chọn menu "Nghỉ phép" > "Đăng ký mới"\n3. Điền thông tin ngày bắt đầu, ngày kết thúc và lý do\n4. Nhấn "Gửi yêu cầu"\n\nLưu ý quan trọng:\n- Cần đăng ký trước ít nhất 3 ngày làm việc\n- Nghỉ phép trên 5 ngày cần sự phê duyệt của Trưởng phòng\n- Mỗi năm bạn được 12 ngày phép',
+//     timestamp: "2024-01-15T10:30:15Z",
+//     citations: mockCitations,
+//     traceId: "trace-abc123def456",
+//     status: "success",
+//   },
+// ];
 
 export const mockDocuments: Document[] = [
   {

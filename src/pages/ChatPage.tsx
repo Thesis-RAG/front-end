@@ -70,7 +70,7 @@ export default function ChatPage() {
             relevance: s.relevance,
           })),
           traceId: item.traceId,
-          status: "success",
+          status: assistant?.status ?? "success",
         };
 
         return [userMsg, assistantMsg];
@@ -240,7 +240,7 @@ export default function ChatPage() {
                 isStreaming: false,
                 citations: result.sources,
                 traceId: result.traceId.toString(36),
-                status: "success",
+                status: result.assistantMessage.status ?? "success",
                 timestamp: result.assistantMessage.createdAt,
               }
             : m,
