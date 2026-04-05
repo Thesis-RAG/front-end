@@ -1,6 +1,7 @@
 import { ENV } from "@/config/env";
 
-export async function auth(payload: { email: string }) {
+export async function auth(payload: { email: string; password: string }) {
+
   const res = await fetch(`${ENV.API_BASE_URL}/auth/login`, {
     method: "POST",
     headers: {

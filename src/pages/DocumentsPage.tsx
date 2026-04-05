@@ -1,15 +1,16 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Search,
-  Plus,
   FileText,
   MoreHorizontal,
   Eye,
   Pencil,
   Archive,
-  Trash2,
   Upload,
+  X,
+  Check,
+  Trash2,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -41,9 +42,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useRef, useMemo } from "react";
-import { toast } from "@/hooks/use-toast";
-
 import {
   Dialog,
   DialogContent,
@@ -52,176 +50,443 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
 import { Label } from "@/components/ui/label";
-
-import { mockDocuments } from "@/data/mockData";
-import { Document, DocumentStatus, SensitivityLevel } from "@/types";
+import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-
+import { DocumentStatus, SensitivityLevel } from "@/types";
 import {
   createDocument,
   uploadDocumentVersion,
+  updateDocument,
+  getDocumentFileUrl,
+  openDocumentFile,
+  submitForReview,
+  deleteDocument,
 } from "@/services/documents.api";
+import { fetchDepartments, Department } from "@/services/departments.api";
+import { fetchProjects, Project } from "@/services/projects.api";
+import { ENV } from "@/config/env";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface DocumentRead {
+  id: string;
+  title: string;
+  description?: string;
+  department_id?: string;
+  project_id?: string;
+  owner_user_id: string;
+  document_type: string;
+  sensitivity_level: string;
+  data_type: string;
+  allowed_roles?: string[];
+  status: string;
+  current_version_id?: string;
+  version_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+async function fetchDocuments(token: string): Promise<DocumentRead[]> {
+  const res = await fetch(`${ENV.API_BASE_URL}/documents`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function DocumentsPage() {
-  const { token, hasPermission } = useAuth();
-  const [documents] = useState<Document[]>(mockDocuments);
+  const { token, hasPermission, user } = useAuth();
+
+  // Data
+  const [documents, setDocuments] = useState<DocumentRead[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loadingDocs, setLoadingDocs] = useState(true);
+  const [docsRefresh, setDocsRefresh] = useState(0);
+
+  // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<DocumentStatus | "all">(
-    "all",
-  );
-  const [sensitivityLevelFilter, setSensitivityLevelFilter] = useState<
-    SensitivityLevel | "all"
-  >("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sensitivityFilter, setSensitivityFilter] = useState("all");
+
+  // Upload document dialog
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-
-  const [uploadDepartment, setUploadDepartment] = useState<string>("");
-  const [uploadSensitivityLevel, setUploadSensitivityLevel] = useState<
-    SensitivityLevel | ""
-  >("");
-  const [uploadReviewLevel, setUploadReviewLevel] = useState<string>("");
+  const [uploadDeptId, setUploadDeptId] = useState("");
+  const [uploadProjectId, setUploadProjectId] = useState("");
+  const [uploadProjects, setUploadProjects] = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [uploadSensitivity, setUploadSensitivity] = useState("");
+  const [uploadReviewer, setUploadReviewer] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedFileName, setSelectedFileName] = useState<string>("");
   const [uploading, setUploading] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const fileVersionInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [uploadVersionDialogOpen, setUploadVersionDialogOpen] = useState(false);
-  const [uploadTargetDocument, setUploadTargetDocument] =
-    useState<Document | null>(null);
+  // Upload version dialog
+  const [versionDialogOpen, setVersionDialogOpen] = useState(false);
+  const [versionTarget, setVersionTarget] = useState<DocumentRead | null>(null);
   const [selectedVersionFile, setSelectedVersionFile] = useState<File | null>(
     null,
   );
-  const [selectedVersionFileName, setSelectedVersionFileName] =
-    useState<string>("");
   const [uploadingVersion, setUploadingVersion] = useState(false);
+  const fileVersionInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Department options: mock data
-  const departmentOptions = useMemo(() => {
-    const depts = Array.from(
-      new Set(documents.map((d) => d.ownerDepartment)),
-    ).filter(Boolean);
-    return depts.length ? depts : ["HR", "IT", "Finance", "Operations"];
-  }, [documents]);
-
-  // Reviewer options: mock data
-  const reviewLevelOptions = [
-    "Director",
-    "Administrator Auditor",
-    "Department Manager",
-  ];
-
-  const canContinueUpload =
-    !!uploadDepartment && !!uploadSensitivityLevel && !!uploadReviewLevel;
-
-  const canEdit = hasPermission("documents.edit");
+  const canEdit = [
+    "department_manager",
+    "director",
+    "admin_auditor",
+    "employee",
+  ].includes(user?.role ?? "");
+  const canMoveDoc = ["admin_auditor", "director"].includes(user?.role ?? "");
+  const canDelete = ["admin_auditor", "director"].includes(user?.role ?? "");
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editField, setEditField] = useState<string | null>(null);
+  const [editProjects, setEditProjects] = useState<Project[]>([]);
+  const editDropdownRef = useRef<HTMLDivElement>(null);
   const hasLevelConfidential = hasPermission("documents.confidential");
   const hasLevelRestricted = hasPermission("documents.restricted");
   const hasLevelTopSecret = hasPermission("documents.top_secret");
 
-  const filteredDocuments = documents.filter((doc) => {
-    const matchesSearch =
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.ownerDepartment.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || doc.status === statusFilter;
-    const matchesSensitivityLevel =
-      sensitivityLevelFilter === "all" ||
-      doc.sensitivity_level === sensitivityLevelFilter;
+  // ── Load data ───────────────────────────────────────────────────────────────
+  useEffect(() => {
+    setLoadingDocs(true);
+    fetchDocuments(token)
+      .then(setDocuments)
+      .catch(() =>
+        toast({ variant: "destructive", title: "Failed to load documents" }),
+      )
+      .finally(() => setLoadingDocs(false));
+  }, [docsRefresh]);
 
-    return matchesSearch && matchesStatus && matchesSensitivityLevel;
-  });
+  useEffect(() => {
+    fetchDepartments(token)
+      .then(setDepartments)
+      .catch(() => {});
+  }, []);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("vi-VN", {
+  // Fetch projects khi department thay đổi
+  useEffect(() => {
+    if (!uploadDeptId) {
+      setUploadProjects([]);
+      setUploadProjectId("");
+      return;
+    }
+    setLoadingProjects(true);
+    setUploadProjectId("");
+    fetchProjects(token, uploadDeptId)
+      .then(setUploadProjects)
+      .catch(() => setUploadProjects([]))
+      .finally(() => setLoadingProjects(false));
+  }, [uploadDeptId]);
+
+  useEffect(() => {
+    fetchProjects(token)
+      .then(setProjects)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (
+        editDropdownRef.current &&
+        !editDropdownRef.current.contains(e.target as Node)
+      ) {
+        setEditingDocId(null);
+        setEditField(null);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleDocUpdate = async (
+    docId: string,
+    field: "department_id" | "project_id" | "sensitivity_level",
+    value: string,
+  ) => {
+    try {
+      const payload: Record<string, string> = { [field]: value };
+      // Nếu đổi dept thì xóa project cũ
+      if (field === "department_id") payload.project_id = "";
+      await updateDocument(docId, payload, token);
+      const refreshed = await fetchDocuments(token);
+      setDocuments(refreshed);
+      // Reload projects nếu đổi dept
+      if (field === "department_id") {
+        const projs = await fetchProjects(token, value);
+        setEditProjects(projs);
+      }
+      toast({ variant: "success", title: "Updated successfully" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: err.message });
+    }
+    setEditingDocId(null);
+    setEditField(null);
+  };
+
+  const handleView = async (doc: DocumentRead) => {
+    if (!doc.current_version_id) {
+      toast({ variant: "destructive", title: "No file version available" });
+      return;
+    }
+    try {
+      await openDocumentFile(doc.id, doc.current_version_id, token);
+    } catch {
+      toast({ variant: "destructive", title: "Cannot open document" });
+    }
+  };
+
+  const handleDelete = async (doc: DocumentRead) => {
+    if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
+    try {
+      await deleteDocument(doc.id, token);
+      toast({ variant: "success", title: "Document deleted" });
+      setDocsRefresh((n) => n + 1);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: err.message,
+      });
+    }
+  };
+
+  const handleOpenEditProjects = async (doc: DocumentRead) => {
+    const projs = await fetchProjects(token, doc.department_id).catch(() => []);
+    setEditProjects(projs);
+  };
+
+  const getProjectName = (id?: string) =>
+    projects.find((p) => p.id === id)?.name ?? "—";
+
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const getDeptName = (id?: string) =>
+    departments.find((d) => d.id === id)?.name ?? id ?? "—";
+
+  const filteredDocuments = useMemo(
+    () =>
+      documents.filter((doc) => {
+        const q = searchQuery.toLowerCase();
+        const deptName = getDeptName(doc.department_id).toLowerCase();
+        const matchSearch =
+          !q || doc.title.toLowerCase().includes(q) || deptName.includes(q);
+        const matchStatus =
+          statusFilter === "all" || doc.status === statusFilter;
+        const matchSensitivity =
+          sensitivityFilter === "all" ||
+          doc.sensitivity_level === sensitivityFilter;
+        return matchSearch && matchStatus && matchSensitivity;
+      }),
+    [documents, searchQuery, statusFilter, sensitivityFilter, departments],
+  );
+
+  const activeFilterCount = [statusFilter, sensitivityFilter].filter(
+    (v) => v !== "all",
+  ).length;
+
+  const formatDate = (s: string) =>
+    new Date(s).toLocaleDateString("vi-VN", {
       year: "numeric",
       month: "short",
       day: "numeric",
     });
+
+  // ── Upload document ─────────────────────────────────────────────────────────
+  const resetUploadForm = () => {
+    setUploadDeptId("");
+    setUploadProjectId("");
+    setUploadProjects([]);
+    setUploadSensitivity("");
+    setUploadReviewer("");
+    setSelectedFile(null);
   };
 
+  const handleUpload = async () => {
+    if (!selectedFile || !uploadDeptId || !uploadSensitivity) return;
+
+    const isPrivileged = ["admin_auditor", "director"].includes(
+      user?.role ?? "",
+    );
+    if (!isPrivileged && !uploadReviewer) return;
+
+    setUploading(true);
+    try {
+      const title = selectedFile.name.replace(/\.[^.]+$/, "");
+      const doc = await createDocument(
+        {
+          title,
+          department_id: uploadDeptId,
+          project_id: uploadProjectId || undefined,
+          document_type: "general",
+          sensitivity_level: uploadSensitivity,
+          data_type: "file",
+        },
+        token,
+      );
+      await uploadDocumentVersion(doc.id, selectedFile, token);
+
+      if (!isPrivileged) {
+        await submitForReview(doc.id, uploadReviewer, token);
+      }
+
+      toast({ variant: "success", title: "Uploaded successfully" });
+      setUploadDialogOpen(false);
+      resetUploadForm();
+      setDocsRefresh((n) => n + 1);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Upload failed",
+        description: err?.message,
+      });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // ── Upload version ──────────────────────────────────────────────────────────
+  const handleUploadVersion = async () => {
+    if (!versionTarget || !selectedVersionFile) return;
+    setUploadingVersion(true);
+    try {
+      await uploadDocumentVersion(versionTarget.id, selectedVersionFile, token);
+      toast({
+        variant: "success",
+        title: "Version uploaded",
+        description: selectedVersionFile.name,
+      });
+      setVersionDialogOpen(false);
+      setVersionTarget(null);
+      setSelectedVersionFile(null);
+      setDocsRefresh((n) => n + 1);
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Upload failed",
+        description: err?.message,
+      });
+    } finally {
+      setUploadingVersion(false);
+      if (fileVersionInputRef.current) fileVersionInputRef.current.value = "";
+    }
+  };
+
+  const reviewerOptions = useMemo(() => {
+    const base = [
+      { label: "Director", value: "director" },
+      { label: "Administrator Auditor", value: "admin_auditor" },
+    ];
+    if (user?.role === "employee") {
+      base.push({ label: "Department Manager", value: "department_manager" });
+    }
+    return base;
+  }, [user?.role]);
+  const canSubmitUpload =
+    !!uploadDeptId &&
+    !!uploadSensitivity &&
+    !!selectedFile &&
+    (["admin_auditor", "director"].includes(user?.role ?? "") ||
+      !!uploadReviewer);
+
+  // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Documents"
         description="Enterprise knowledge document management"
-        breadcrumbs={[{ label: "Documents" }]}
         actions={
           canEdit && (
             <Button
               className="gap-2"
               onClick={() => {
-                setUploadDepartment("");
-                setUploadSensitivityLevel("");
-                setUploadReviewLevel("");
+                resetUploadForm();
                 setUploadDialogOpen(true);
               }}
             >
-              <Upload className="h-4 w-4" />
-              Upload Document
+              <Upload className="h-4 w-4" /> Upload Document
             </Button>
           )
         }
       />
 
       <div className="flex-1 overflow-auto p-6">
-        {/* Filters */}
-        <div className="mb-6 flex items-center gap-4">
-          <div className="relative flex-1 max-w-sm">
+        {/* Filter bar */}
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search documents..."
-              className="pl-10"
+              className="pl-9 h-9 placeholder:text-[12.5px]"
             />
           </div>
 
+          <div className="h-6 w-px bg-border" />
+
           {canEdit && (
-            <Select
-              value={statusFilter}
-              onValueChange={(v) =>
-                setStatusFilter(v as DocumentStatus | "all")
-              }
-            >
-              <SelectTrigger className="w-40">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger
+                className={`h-9 w-auto px-3 text-[12.5px] ${statusFilter !== "all" ? "border-primary text-primary bg-primary/5" : ""}`}
+              >
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="review">In Review</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="uploaded">Uploaded</SelectItem>
                 <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
           )}
 
           <Select
-            value={sensitivityLevelFilter}
-            onValueChange={(v) =>
-              setSensitivityLevelFilter(v as SensitivityLevel | "all")
-            }
+            value={sensitivityFilter}
+            onValueChange={setSensitivityFilter}
           >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Sensitivity Level" />
+            <SelectTrigger
+              className={`h-9 w-auto px-3 text-[12.5px] ${sensitivityFilter !== "all" ? "border-primary text-primary bg-primary/5" : ""}`}
+            >
+              <SelectValue placeholder="Sensitivity" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All levels</SelectItem>
+              <SelectItem value="all">All Levels</SelectItem>
               <SelectItem value="public">Public</SelectItem>
               <SelectItem value="internal">Internal</SelectItem>
               {hasLevelConfidential && (
                 <SelectItem value="confidential">Confidential</SelectItem>
               )}
               {hasLevelRestricted && (
-                <SelectItem value="restricted">Restriected</SelectItem>
+                <SelectItem value="restricted">Restricted</SelectItem>
               )}
               {hasLevelTopSecret && (
-                <SelectItem value="top_secret">Top secret</SelectItem>
+                <SelectItem value="top_secret">Top Secret</SelectItem>
               )}
             </SelectContent>
           </Select>
+
+          {activeFilterCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-3 text-muted-foreground hover:text-foreground gap-1.5"
+              onClick={() => {
+                setStatusFilter("all");
+                setSensitivityFilter("all");
+              }}
+            >
+              <X className="h-3.5 w-3.5" /> Clear
+              <Badge
+                variant="secondary"
+                className="h-5 w-5 p-0 flex items-center justify-center text-xs"
+              >
+                {activeFilterCount}
+              </Badge>
+            </Button>
+          )}
         </div>
 
         {/* Table */}
@@ -229,19 +494,35 @@ export default function DocumentsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[40%]">Title</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Sensitivity</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Updated</TableHead>
-                <TableHead className="w-12"></TableHead>
+                <TableHead className="w-[38%] font-bold text-black">
+                  Title
+                </TableHead>
+                <TableHead className="font-bold text-black">
+                  Department
+                </TableHead>
+                <TableHead className="font-bold text-black">Project</TableHead>
+                <TableHead className="font-bold text-black">
+                  Sensitivity
+                </TableHead>
+                <TableHead className="font-bold text-black">Status</TableHead>
+                <TableHead className="font-bold text-black">Versions</TableHead>
+                <TableHead className="font-bold text-black">Updated</TableHead>
+                <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDocuments.length === 0 ? (
+              {loadingDocs ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-32 text-center">
+                  <TableCell
+                    colSpan={7}
+                    className="h-32 text-center text-muted-foreground"
+                  >
+                    Loading...
+                  </TableCell>
+                </TableRow>
+              ) : filteredDocuments.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="h-32 text-center">
                     <div className="flex flex-col items-center justify-center text-muted-foreground">
                       <FileText className="h-8 w-8 mb-2" />
                       <p>No documents found</p>
@@ -252,43 +533,185 @@ export default function DocumentsPage() {
                 filteredDocuments.map((doc) => (
                   <TableRow key={doc.id}>
                     <TableCell>
-                      <Link
-                        to={`/documents/${doc.id}`}
-                        className="font-medium text-foreground hover:text-primary transition-colors"
+                      <button
+                        onClick={() => handleView(doc)}
+                        className="font-medium text-foreground hover:text-primary transition-colors text-left"
                       >
                         {doc.title}
-                      </Link>
-                      <div className="mt-1 flex gap-1 flex-wrap">
-                        {doc.tags.slice(0, 3).map((tag) => (
+                      </button>
+                    </TableCell>
+                    {/* Department */}
+                    <TableCell>
+                      {canMoveDoc ? (
+                        <div
+                          className="relative inline-block"
+                          ref={
+                            editingDocId === doc.id && editField === "dept"
+                              ? editDropdownRef
+                              : null
+                          }
+                        >
                           <Badge
-                            key={tag}
                             variant="secondary"
-                            className="text-xs"
+                            className="cursor-pointer hover:bg-gray-300 font-normal"
+                            onClick={() => {
+                              setEditingDocId(doc.id);
+                              setEditField("dept");
+                            }}
                           >
-                            {tag}
+                            {getDeptName(doc.department_id)}
                           </Badge>
-                        ))}
-                        {doc.tags.length > 3 && (
-                          <Badge variant="secondary" className="text-xs">
-                            +{doc.tags.length - 3}
-                          </Badge>
-                        )}
-                      </div>
+                          {editingDocId === doc.id && editField === "dept" && (
+                            <div className="absolute z-50 top-full left-0 mt-1 w-52 rounded-md border bg-popover shadow-md">
+                              <div className="max-h-48 overflow-y-auto py-1">
+                                {departments.map((d) => (
+                                  <button
+                                    key={d.id}
+                                    className="flex items-center w-full px-3 py-1.5 text-sm hover:bg-gray-200 gap-2 rounded"
+                                    onClick={() =>
+                                      handleDocUpdate(
+                                        doc.id,
+                                        "department_id",
+                                        d.id,
+                                      )
+                                    }
+                                  >
+                                    {d.id === doc.department_id ? (
+                                      <Check className="h-4 w-4 text-primary shrink-0" />
+                                    ) : (
+                                      <span className="w-4 shrink-0" />
+                                    )}
+                                    {d.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge
+                          variant="secondary"
+                          className="cursor-default font-normal"
+                        >
+                          {getDeptName(doc.department_id)}
+                        </Badge>
+                      )}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {doc.ownerDepartment}
+
+                    {/* Project */}
+                    <TableCell>
+                      {canMoveDoc ? (
+                        <div
+                          className="relative inline-block"
+                          ref={
+                            editingDocId === doc.id && editField === "proj"
+                              ? editDropdownRef
+                              : null
+                          }
+                        >
+                          <Badge
+                            variant="secondary"
+                            className="cursor-pointer hover:bg-gray-300 font-normal"
+                            onClick={async () => {
+                              await handleOpenEditProjects(doc);
+                              setEditingDocId(doc.id);
+                              setEditField("proj");
+                            }}
+                          >
+                            {getProjectName(doc.project_id)}
+                          </Badge>
+                          {editingDocId === doc.id && editField === "proj" && (
+                            <div className="absolute z-50 top-full left-0 mt-1 w-52 rounded-md border bg-popover shadow-md">
+                              <div className="max-h-48 overflow-y-auto py-1">
+                                <button
+                                  className="flex items-center w-full px-3 py-1.5 text-sm hover:bg-gray-200 gap-2 rounded"
+                                  onClick={() =>
+                                    handleDocUpdate(doc.id, "project_id", "")
+                                  }
+                                >
+                                  {!doc.project_id ? (
+                                    <Check className="h-4 w-4 text-primary shrink-0" />
+                                  ) : (
+                                    <span className="w-4 shrink-0" />
+                                  )}
+                                  None
+                                </button>
+                                {editProjects.map((p) => (
+                                  <button
+                                    key={p.id}
+                                    className="flex items-center w-full px-3 py-1.5 text-sm hover:bg-gray-200 gap-2 rounded"
+                                    onClick={() =>
+                                      handleDocUpdate(
+                                        doc.id,
+                                        "project_id",
+                                        p.id,
+                                      )
+                                    }
+                                  >
+                                    {p.id === doc.project_id ? (
+                                      <Check className="h-4 w-4 text-primary shrink-0" />
+                                    ) : (
+                                      <span className="w-4 shrink-0" />
+                                    )}
+                                    {p.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge
+                          variant="secondary"
+                          className="cursor-default font-normal"
+                        >
+                          {getProjectName(doc.project_id)}
+                        </Badge>
+                      )}
+                    </TableCell>
+
+                    {/* Sensitivity */}
+                    <TableCell>
+                      {canMoveDoc ? (
+                        <Select
+                          value={doc.sensitivity_level}
+                          onValueChange={(v) =>
+                            handleDocUpdate(doc.id, "sensitivity_level", v)
+                          }
+                        >
+                          <SelectTrigger className="h-auto w-auto border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden">
+                            <SensitivityLevelBadge
+                              level={doc.sensitivity_level as SensitivityLevel}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="public">Public</SelectItem>
+                            <SelectItem value="internal">Internal</SelectItem>
+                            <SelectItem value="confidential">
+                              Confidential
+                            </SelectItem>
+                            <SelectItem value="restricted">
+                              Restricted
+                            </SelectItem>
+                            <SelectItem value="top_secret">
+                              Top Secret
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <SensitivityLevelBadge
+                          level={doc.sensitivity_level as SensitivityLevel}
+                        />
+                      )}
                     </TableCell>
                     <TableCell>
-                      <SensitivityLevelBadge level={doc.sensitivity_level} />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={doc.status} />
+                      <StatusBadge status={doc.status as DocumentStatus} />
                     </TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">
-                      {doc.currentVersion}
+                      v{doc.version_count}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(doc.updatedAt)}
+                    <TableCell className="text-muted-foreground text-[12px]">
+                      {formatDate(doc.updated_at)}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -301,35 +724,53 @@ export default function DocumentsPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem asChild>
-                            <Link to={`/documents/${doc.id}`}>
-                              <Eye className="mr-2 h-4 w-4" />
-                              View
-                            </Link>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem onClick={() => handleView(doc)}>
+                            <Eye className="mr-2 h-4 w-4" />
+                            View
                           </DropdownMenuItem>
+
                           {canEdit && (
                             <>
-                              <DropdownMenuItem>
-                                <Pencil className="mr-2 h-4 w-4" />
-                                Edit Metadata
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setUploadTargetDocument(doc);
-                                  setSelectedVersionFile(null);
-                                  setSelectedVersionFileName("");
-                                  setUploadVersionDialogOpen(true);
-                                }}
-                              >
-                                <Upload className="mr-2 h-4 w-4" />
-                                Upload New Version
-                              </DropdownMenuItem>
+                              {canMoveDoc && (
+                                <DropdownMenuItem>
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Edit Metadata
+                                </DropdownMenuItem>
+                              )}
+
+                              {canMoveDoc && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setVersionTarget(doc);
+                                    setSelectedVersionFile(null);
+                                    setVersionDialogOpen(true);
+                                  }}
+                                >
+                                  <Upload className="mr-2 h-4 w-4" />
+                                  Upload New Version
+                                </DropdownMenuItem>
+                              )}
+
                               <DropdownMenuSeparator />
+
                               <DropdownMenuItem>
                                 <Archive className="mr-2 h-4 w-4" />
                                 Archive
                               </DropdownMenuItem>
+
+                              {canDelete && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => handleDelete(doc)}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </>
                           )}
                         </DropdownMenuContent>
@@ -342,81 +783,104 @@ export default function DocumentsPage() {
           </Table>
         </div>
 
-        {/* Pagination info */}
-        <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-          <p>
-            Showing {filteredDocuments.length} of {documents.length} documents
-          </p>
+        <div className="mt-4 text-sm text-muted-foreground">
+          Showing {filteredDocuments.length} of {documents.length} documents
         </div>
       </div>
 
-      {/* Hidden file input */}
+      {/* Hidden file inputs */}
       <input
         ref={fileInputRef}
         type="file"
         className="hidden"
-        // accept=".pdf,.doc,.docx,.xlsx,.ppt,.pptx"
-        onChange={(e) => {
-          const file = e.target.files?.[0] ?? null;
-          if (!file) return;
-
-          setSelectedFile(file);
-          setSelectedFileName(file.name);
-          // don't upload here; wait for Continue
-          // keep input value so user can re-open and change if needed
-        }}
+        onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
       />
       <input
         ref={fileVersionInputRef}
         type="file"
         className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0] ?? null;
-          if (!file) return;
-
-          setSelectedVersionFile(file);
-          setSelectedVersionFileName(file.name);
-        }}
+        onChange={(e) => setSelectedVersionFile(e.target.files?.[0] ?? null)}
       />
-      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+
+      {/* Upload Document Dialog */}
+      <Dialog
+        open={uploadDialogOpen}
+        onOpenChange={(o) => {
+          setUploadDialogOpen(o);
+          if (!o) resetUploadForm();
+        }}
+      >
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Upload document</DialogTitle>
-            <DialogDescription>
-              Choose the file and provide necessary metadata before uploading.
+            <DialogTitle>Upload Document</DialogTitle>
+            <DialogDescription className="text-[12.5px]">
+              Select a file and fill in metadata before uploading.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
+            {/* Department */}
             <div className="grid gap-2">
               <Label>Department</Label>
-              <Select
-                value={uploadDepartment}
-                onValueChange={setUploadDepartment}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Department" />
+              <Select value={uploadDeptId} onValueChange={setUploadDeptId}>
+                <SelectTrigger className="data-[placeholder]:text-[12.5px]">
+                  <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  {departmentOptions.map((dept) => (
-                    <SelectItem key={dept} value={dept}>
-                      {dept}
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {d.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
+            {/* Project — hiện sau khi chọn department */}
+            {uploadDeptId && (
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <Label>Project</Label>
+                  <span className="text-xs text-muted-foreground">
+                    Optional
+                  </span>
+                </div>
+                <Select
+                  value={uploadProjectId}
+                  onValueChange={setUploadProjectId}
+                  disabled={loadingProjects || uploadProjects.length === 0}
+                >
+                  <SelectTrigger className="data-[placeholder]:text-[12.5px]">
+                    <SelectValue
+                      placeholder={
+                        loadingProjects
+                          ? "Loading projects..."
+                          : uploadProjects.length === 0
+                            ? "No projects in this department"
+                            : "Select project (optional)"
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {uploadProjects.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Sensitivity */}
             <div className="grid gap-2">
               <Label>Sensitivity Level</Label>
               <Select
-                value={uploadSensitivityLevel}
-                onValueChange={(v) =>
-                  setUploadSensitivityLevel(v as SensitivityLevel)
-                }
+                value={uploadSensitivity}
+                onValueChange={setUploadSensitivity}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Sensitivity Level" />
+                <SelectTrigger className="data-[placeholder]:text-[12.5px]">
+                  <SelectValue placeholder="Select sensitivity level" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="public">Public</SelectItem>
@@ -425,48 +889,71 @@ export default function DocumentsPage() {
                     <SelectItem value="confidential">Confidential</SelectItem>
                   )}
                   {hasLevelRestricted && (
-                    <SelectItem value="restricted">Restriected</SelectItem>
+                    <SelectItem value="restricted">Restricted</SelectItem>
                   )}
                   {hasLevelTopSecret && (
-                    <SelectItem value="top_secret">Top secret</SelectItem>
+                    <SelectItem value="top_secret">Top Secret</SelectItem>
                   )}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* TODO: reviewer is needed? */}
-            <div className="grid gap-2">
-              <Label>Reviewer</Label>
-              <Select
-                value={uploadReviewLevel}
-                onValueChange={setUploadReviewLevel}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Reviewer" />
-                </SelectTrigger>
-                <SelectContent>
-                  {reviewLevelOptions.map((lvl) => (
-                    <SelectItem key={lvl} value={lvl}>
-                      {lvl}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="mt-2">
-            <Label>File</Label>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Choose file
-              </Button>
-              <div className="text-sm text-muted-foreground">
-                {selectedFileName || "No file chosen"}
+            {/* Reviewer */}
+            {!["admin_auditor", "director"].includes(user?.role ?? "") && (
+              <div className="grid gap-2">
+                <Label>Reviewer</Label>
+                <Select
+                  value={uploadReviewer}
+                  onValueChange={setUploadReviewer}
+                >
+                  <SelectTrigger className="data-[placeholder]:text-[12.5px]">
+                    <SelectValue placeholder="Select reviewer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {reviewerOptions.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+            )}
+
+            {/* File picker */}
+            <div className="grid gap-2">
+              <Label>File</Label>
+              <div className="flex items-center gap-3">
+                <Button
+                  className="text-[13px]"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Choose file
+                </Button>
+                <span className="text-sm text-muted-foreground truncate max-w-[240px]">
+                  {selectedFile?.name ?? "No file chosen"}
+                </span>
+                {selectedFile && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+              {selectedFile && (
+                <p className="text-xs text-muted-foreground">
+                  {(selectedFile.size / 1024).toFixed(1)} KB ·{" "}
+                  {selectedFile.type || "unknown type"}
+                </p>
+              )}
             </div>
           </div>
 
@@ -477,156 +964,95 @@ export default function DocumentsPage() {
             >
               Cancel
             </Button>
-
             <Button
-              disabled={!canContinueUpload || !selectedFile || uploading}
-              onClick={async () => {
-                if (!selectedFile) return;
-                setUploading(true);
-                try {
-                  const title = selectedFileName
-                    ? selectedFileName.replace(/\.[^.]+$/, "")
-                    : "Untitled document";
-
-                  const document = await createDocument(
-                    {
-                      title,
-                      description: "",
-                      department_id: "ae4e0539-0362-488a-921e-c2abb4cb3ac0",
-                      // TODO: call department in db UploadDepartment.id
-                      project_id: undefined,
-                      document_type: "general",
-                      sensitivity_level: uploadSensitivityLevel || undefined,
-                      data_type: "file",
-                    },
-                    token,
-                  );
-
-                  await uploadDocumentVersion(document.id, selectedFile, token);
-
-                  toast({
-                    variant: "success",
-                    title: "Upload successful",
-                    description: `${selectedFileName} uploaded successfully`,
-                  });
-
-                  // reset
-                  setSelectedFile(null);
-                  setSelectedFileName("");
-                  setUploadDepartment("");
-                  setUploadSensitivityLevel("");
-                  setUploadReviewLevel("");
-                  setUploadDialogOpen(false);
-                } catch (err: any) {
-                  toast({
-                    variant: "destructive",
-                    title: "Upload failed",
-                    description: err?.message || "Unable to upload file",
-                  });
-                } finally {
-                  setUploading(false);
-                  // reset hidden input value so re-selection of same file works
-                  if (fileInputRef.current) fileInputRef.current.value = "";
-                }
-              }}
+              disabled={!canSubmitUpload || uploading}
+              onClick={handleUpload}
             >
-              {uploading ? "Uploading..." : "Continue"}
+              {uploading ? "Uploading..." : "Upload"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Upload New Version Dialog */}
+      {/* Upload Version Dialog */}
       <Dialog
-        open={uploadVersionDialogOpen}
-        onOpenChange={setUploadVersionDialogOpen}
+        open={versionDialogOpen}
+        onOpenChange={(o) => {
+          setVersionDialogOpen(o);
+          if (!o) {
+            setVersionTarget(null);
+            setSelectedVersionFile(null);
+          }
+        }}
       >
-        <DialogContent className="sm:max-w-[520px]">
+        <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle>Upload new version</DialogTitle>
-            <DialogDescription>
+            <DialogTitle>Upload New Version</DialogTitle>
+            <DialogDescription className="text-[12px]">
               Upload a new version for the selected document.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
-            {uploadTargetDocument && (
-              <div className="grid gap-2">
-                <Label>Document</Label>
-                <div className="rounded-md border p-3 bg-background">
-                  <div className="font-medium">
-                    {uploadTargetDocument.title}
-                  </div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Current version: {uploadTargetDocument.currentVersion} ﾂｷ{" "}
-                    {uploadTargetDocument.ownerDepartment}
-                  </div>
-                </div>
+            {versionTarget && (
+              <div className="rounded-md border p-3 bg-muted/40">
+                <p className="font-medium text-sm">{versionTarget.title}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Current: v{versionTarget.version_count} ·{" "}
+                  {getDeptName(versionTarget.department_id)}
+                </p>
               </div>
             )}
 
-            <div className="mt-2">
+            <div className="grid gap-2">
               <Label>File</Label>
               <div className="flex items-center gap-3">
                 <Button
                   variant="outline"
                   onClick={() => fileVersionInputRef.current?.click()}
+                  className="text-[12px]"
                 >
                   Choose file
                 </Button>
-                <div className="text-sm text-muted-foreground">
-                  {selectedVersionFileName || "No file chosen"}
-                </div>
+                <span className="text-[12px] text-muted-foreground truncate max-w-[220px]">
+                  {selectedVersionFile?.name ?? "No file chosen"}
+                </span>
+                {selectedVersionFile && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={() => {
+                      setSelectedVersionFile(null);
+                      if (fileVersionInputRef.current)
+                        fileVersionInputRef.current.value = "";
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
+              {selectedVersionFile && (
+                <p className="text-xs text-muted-foreground">
+                  {(selectedVersionFile.size / 1024).toFixed(1)} KB ·{" "}
+                  {selectedVersionFile.type || "unknown type"}
+                </p>
+              )}
             </div>
           </div>
 
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setUploadVersionDialogOpen(false)}
+              onClick={() => setVersionDialogOpen(false)}
             >
               Cancel
             </Button>
-
             <Button
               disabled={!selectedVersionFile || uploadingVersion}
-              onClick={async () => {
-                if (!uploadTargetDocument || !selectedVersionFile) return;
-                setUploadingVersion(true);
-                try {
-                  await uploadDocumentVersion(
-                    "5afd7ae8-a0eb-4859-bbfe-c9cdbebac7f0",
-                    // TODO: change to uploadTargetDocument.id
-                    selectedVersionFile,
-                    token,
-                  );
-
-                  toast({
-                    variant: "success",
-                    title: "Upload successful",
-                    description: `${selectedVersionFileName} uploaded`,
-                  });
-
-                  // reset
-                  setSelectedVersionFile(null);
-                  setSelectedVersionFileName("");
-                  setUploadTargetDocument(null);
-                  setUploadVersionDialogOpen(false);
-                } catch (err: any) {
-                  toast({
-                    variant: "destructive",
-                    title: "Upload failed",
-                    description: err?.message || "Unable to upload file",
-                  });
-                } finally {
-                  setUploadingVersion(false);
-                  if (fileVersionInputRef.current)
-                    fileVersionInputRef.current.value = "";
-                }
-              }}
+              onClick={handleUploadVersion}
             >
-              {uploadingVersion ? "Uploading..." : "Continue"}
+              {uploadingVersion ? "Uploading..." : "Upload"}
             </Button>
           </DialogFooter>
         </DialogContent>

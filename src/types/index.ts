@@ -6,7 +6,14 @@ export type UserRole =
   | "admin_auditor";
 
 // Document status
-export type DocumentStatus = "draft" | "review" | "approved" | "archived";
+export type DocumentStatus =
+  | "draft"
+  | "uploaded"
+  | "processing"
+  | "review"
+  | "approved"
+  | "archived"
+  | "ready";
 
 // Sensitivity levels
 export type SensitivityLevel =

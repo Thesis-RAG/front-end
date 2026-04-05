@@ -1,20 +1,9 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  CheckCircle,
-  XCircle,
-  Clock,
-  FileText,
-  ArrowRight,
-  MessageSquare,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { CheckCircle, XCircle, Clock, FileText } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import {
-  StatusBadge,
-  SensitivityLevelBadge,
-} from "@/components/ui/status-badge";
+import { SensitivityLevelBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -26,91 +15,88 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { mockDocuments } from "@/data/mockData";
+import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  fetchPendingApprovals,
+  approveDocument,
+  rejectDocument,
+} from "@/services/documents.api";
 
-interface ApprovalItem {
+interface DocRecord {
   id: string;
-  documentId: string;
-  documentTitle: string;
-  version: string;
-  previousVersion?: string;
-  department: string;
-  sensitivity_level:
-    | "public"
-    | "internal"
-    | "confidential"
-    | "restricted"
-    | "top_secret";
-  submittedBy: string;
-  submittedAt: string;
-  status: "draft" | "review";
-  changesCount: number;
+  title: string;
+  status: string;
+  sensitivity_level: string;
+  department_id: string;
+  owner_user_id: string;
+  version_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
-const mockApprovals: ApprovalItem[] = [
-  {
-    id: "apr-1",
-    documentId: "doc-3",
-    documentTitle: "Hﾆｰ盻嬾g d蘯ｫn s盻ｭ d盻･ng CRM",
-    version: "v1.5",
-    previousVersion: "v1.4",
-    department: "Sales",
-    sensitivity_level: "internal",
-    submittedBy: "Tr蘯ｧn Vﾄハ Nam",
-    submittedAt: "2024-01-12T09:00:00Z",
-    status: "review",
-    changesCount: 12,
-  },
-  {
-    id: "apr-2",
-    documentId: "doc-4",
-    documentTitle: "Quy trﾃｬnh tuy盻ハ d盻･ng",
-    version: "v4.0-draft",
-    previousVersion: "v3.2",
-    department: "HR",
-    sensitivity_level: "internal",
-    submittedBy: "Nguy盻?n Th盻? Mai",
-    submittedAt: "2024-01-14T16:00:00Z",
-    status: "draft",
-    changesCount: 28,
-  },
-];
+const formatDate = (s: string) =>
+  new Date(s).toLocaleDateString("vi-VN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
 export default function ApprovalsPage() {
-  const [approvals] = useState<ApprovalItem[]>(mockApprovals);
-  const [selectedApproval, setSelectedApproval] = useState<ApprovalItem | null>(
-    null,
-  );
+  const { token } = useAuth();
+  const [docs, setDocs] = useState<DocRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<DocRecord | null>(null);
   const [actionType, setActionType] = useState<"approve" | "reject" | null>(
     null,
   );
   const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const pendingReview = approvals.filter((a) => a.status === "review");
-  const pendingDraft = approvals.filter((a) => a.status === "draft");
+  const load = () => {
+    setLoading(true);
+    fetchPendingApprovals(token)
+      .then(setDocs)
+      .catch(() =>
+        toast({ variant: "destructive", title: "Failed to load approvals" }),
+      )
+      .finally(() => setLoading(false));
+  };
 
-  const handleAction = (approval: ApprovalItem, type: "approve" | "reject") => {
-    setSelectedApproval(approval);
+  useEffect(() => {
+    load();
+  }, []);
+
+  const pendingReview = docs.filter((d) => d.status === "review");
+  const pendingUploaded = docs.filter((d) => d.status === "uploaded");
+
+  const handleAction = (doc: DocRecord, type: "approve" | "reject") => {
+    setSelected(doc);
     setActionType(type);
     setComment("");
   };
 
-  const confirmAction = () => {
-    // In real app, send to backend
-    console.log("Action:", actionType, selectedApproval?.id, comment);
-    setSelectedApproval(null);
-    setActionType(null);
-    setComment("");
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("vi-VN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const confirmAction = async () => {
+    if (!selected || !actionType) return;
+    setSubmitting(true);
+    try {
+      if (actionType === "approve") {
+        await approveDocument(selected.id, token);
+        toast({ variant: "success", title: "Document approved" });
+      } else {
+        await rejectDocument(selected.id, comment, token);
+        toast({ variant: "success", title: "Document rejected" });
+      }
+      setSelected(null);
+      setActionType(null);
+      load();
+    } catch {
+      toast({ variant: "destructive", title: `Failed to ${actionType}` });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -118,9 +104,7 @@ export default function ApprovalsPage() {
       <PageHeader
         title="Approvals"
         description="Document and new version approval"
-        breadcrumbs={[{ label: "Approvals" }]}
       />
-
       <div className="flex-1 overflow-auto p-6">
         {/* Stats */}
         <div className="mb-6 grid grid-cols-3 gap-4">
@@ -142,13 +126,13 @@ export default function ApprovalsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Draft Documents
+                Uploaded (Pending Ingest)
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-bold">
-                  {pendingDraft.length}
+                  {pendingUploaded.length}
                 </span>
                 <FileText className="h-5 w-5 text-status-draft" />
               </div>
@@ -157,81 +141,81 @@ export default function ApprovalsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Approved This Week
+                Total Pending
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">5</span>
+                <span className="text-3xl font-bold">{docs.length}</span>
                 <CheckCircle className="h-5 w-5 text-status-approved" />
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Tabs */}
         <Tabs defaultValue="review" className="space-y-4">
           <TabsList>
-            <TabsTrigger value="review" className="gap-2">
+            <TabsTrigger value="review" className="gap-2 text-[12.5px]">
               In Review
               {pendingReview.length > 0 && (
                 <Badge
                   variant="secondary"
-                  className="h-5 w-5 rounded-full p-0 text-xs"
+                  className="h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-blue-500 text-white"
                 >
                   {pendingReview.length}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="draft" className="gap-2">
-              Drafts
-              {pendingDraft.length > 0 && (
+            <TabsTrigger value="uploaded" className="gap-2 text-[12.5px]">
+              Uploaded
+              {pendingUploaded.length > 0 && (
                 <Badge
                   variant="secondary"
                   className="h-5 w-5 rounded-full p-0 text-xs"
                 >
-                  {pendingDraft.length}
+                  {pendingUploaded.length}
                 </Badge>
               )}
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="review" className="space-y-4">
-            {pendingReview.length === 0 ? (
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : pendingReview.length === 0 ? (
               <EmptyState
                 icon={CheckCircle}
                 title="No pending reviews"
                 description="All documents have been reviewed"
               />
             ) : (
-              pendingReview.map((item) => (
+              pendingReview.map((doc) => (
                 <ApprovalCard
-                  key={item.id}
-                  item={item}
-                  onApprove={() => handleAction(item, "approve")}
-                  onReject={() => handleAction(item, "reject")}
-                  formatDate={formatDate}
+                  key={doc.id}
+                  doc={doc}
+                  onApprove={() => handleAction(doc, "approve")}
+                  onReject={() => handleAction(doc, "reject")}
                 />
               ))
             )}
           </TabsContent>
 
-          <TabsContent value="draft" className="space-y-4">
-            {pendingDraft.length === 0 ? (
+          <TabsContent value="uploaded" className="space-y-4">
+            {loading ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : pendingUploaded.length === 0 ? (
               <EmptyState
                 icon={FileText}
-                title="No draft documents"
-                description="All drafts have been submitted for review"
+                title="No uploaded documents"
+                description="No documents waiting for approval"
               />
             ) : (
-              pendingDraft.map((item) => (
+              pendingUploaded.map((doc) => (
                 <ApprovalCard
-                  key={item.id}
-                  item={item}
-                  onApprove={() => handleAction(item, "approve")}
-                  onReject={() => handleAction(item, "reject")}
-                  formatDate={formatDate}
-                  isDraft
+                  key={doc.id}
+                  doc={doc}
+                  onApprove={() => handleAction(doc, "approve")}
+                  onReject={() => handleAction(doc, "reject")}
                 />
               ))
             )}
@@ -239,71 +223,66 @@ export default function ApprovalsPage() {
         </Tabs>
       </div>
 
-      {/* Action Dialog */}
-      <Dialog
-        open={!!selectedApproval}
-        onOpenChange={() => setSelectedApproval(null)}
-      >
+      <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-[20px]">
               {actionType === "approve"
                 ? "Approve Document"
                 : "Reject Document"}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-[12px]">
               {actionType === "approve"
                 ? "This will approve the document and make it available in the knowledge base."
                 : "Please provide a reason for rejection."}
             </DialogDescription>
           </DialogHeader>
-
           <div className="py-4">
-            <p className="mb-2 text-sm font-medium">Document:</p>
-            <p className="text-sm text-muted-foreground">
-              {selectedApproval?.documentTitle}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Version: {selectedApproval?.version}
-            </p>
+            <div className="flex">
+              <p className="mb-1 text-[13px] font-medium mr-2">Document:</p>
+              <Badge
+                variant="secondary"
+                className="text-[12px] text-muted-foreground"
+              >
+                <div className="mr-1">{selected?.title}</div>
+                <code className="ml-1text-sm text-muted-foreground">
+                  • v{selected?.version_count}
+                </code>
+              </Badge>
+            </div>
 
-            {actionType === "reject" && (
-              <div className="mt-4">
-                <label className="text-sm font-medium">Reason (required)</label>
-                <Textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Explain why this document is being rejected..."
-                  className="mt-2"
-                />
-              </div>
-            )}
-
-            {actionType === "approve" && (
-              <div className="mt-4">
-                <label className="text-sm font-medium">
-                  Comment (optional)
-                </label>
-                <Textarea
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Add any notes about this approval..."
-                  className="mt-2"
-                />
-              </div>
-            )}
+            <div className="mt-4">
+              <label className="text-[13px] font-medium">
+                {actionType === "reject"
+                  ? "Reason (required)"
+                  : "Comment (optional)"}
+              </label>
+              <Textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                placeholder={
+                  actionType === "reject" ? "Explain why..." : "Add notes..."
+                }
+                className="mt-2 text-[12px]"
+              />
+            </div>
           </div>
-
           <DialogFooter>
-            <Button variant="outline" onClick={() => setSelectedApproval(null)}>
+            <Button variant="outline" onClick={() => setSelected(null)}>
               Cancel
             </Button>
             <Button
               variant={actionType === "approve" ? "default" : "destructive"}
               onClick={confirmAction}
-              disabled={actionType === "reject" && !comment.trim()}
+              disabled={
+                submitting || (actionType === "reject" && !comment.trim())
+              }
             >
-              {actionType === "approve" ? "Approve" : "Reject"}
+              {submitting
+                ? "Processing..."
+                : actionType === "approve"
+                  ? "Approve"
+                  : "Reject"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -313,17 +292,13 @@ export default function ApprovalsPage() {
 }
 
 function ApprovalCard({
-  item,
+  doc,
   onApprove,
   onReject,
-  formatDate,
-  isDraft = false,
 }: {
-  item: ApprovalItem;
+  doc: DocRecord;
   onApprove: () => void;
   onReject: () => void;
-  formatDate: (date: string) => string;
-  isDraft?: boolean;
 }) {
   return (
     <Card>
@@ -331,62 +306,39 @@ function ApprovalCard({
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <Link
-                to={`/documents/${item.documentId}`}
-                className="font-medium text-foreground hover:text-primary transition-colors"
-              >
-                {item.documentTitle}
-              </Link>
-              <StatusBadge status={item.status} />
-              <SensitivityLevelBadge level={item.sensitivity_level} />
+              <span className="font-medium text-[15px]">{doc.title}</span>
+              <SensitivityLevelBadge level={doc.sensitivity_level as any} />
             </div>
-
-            <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
-              <span>
-                Version:{" "}
-                <code className="rounded bg-muted px-1">{item.version}</code>
+            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+              <span className="text-[12px]">
+                Versions:{" "}
+                <code className="rounded bg-muted px-1">
+                  {doc.version_count}
+                </code>
               </span>
-              {item.previousVersion && (
-                <>
-                  <ArrowRight className="h-4 w-4" />
-                  <span>
-                    From:{" "}
-                    <code className="rounded bg-muted px-1">
-                      {item.previousVersion}
-                    </code>
-                  </span>
-                </>
-              )}
+              <span>·</span>
+              <span className="text-[12px]">
+                Updated: {formatDate(doc.updated_at)}
+              </span>
             </div>
-
-            <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
-              <span>{item.department}</span>
-              <span>窶｢</span>
-              <span>Submitted by {item.submittedBy}</span>
-              <span>窶｢</span>
-              <span>{formatDate(item.submittedAt)}</span>
-            </div>
-
-            <div className="mt-3 flex items-center gap-2">
-              <Badge variant="secondary">{item.changesCount} changes</Badge>
-              <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
-                <Link
-                  to={`/documents/${item.documentId}/versions/${item.version}`}
-                >
-                  View Changes
-                </Link>
-              </Button>
+            <div className="mt-1 text-xs text-muted-foreground font-mono">
+              ID: {doc.id.slice(0, 30)}...
             </div>
           </div>
-
           <div className="flex items-center gap-2 shrink-0">
-            <Button variant="outline" size="sm" onClick={onReject}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onReject}
+              className="text-xs hover:bg-gray-100 hover:text-black"
+            >
               <XCircle className="mr-1.5 h-4 w-4" />
               Reject
             </Button>
-            <Button size="sm" onClick={onApprove}>
+
+            <Button size="sm" onClick={onApprove} className="text-xs">
               <CheckCircle className="mr-1.5 h-4 w-4" />
-              {isDraft ? "Submit for Review" : "Approve"}
+              Approve
             </Button>
           </div>
         </div>

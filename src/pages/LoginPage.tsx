@@ -1,57 +1,47 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Building2, LogIn } from "lucide-react";
+import { Building2, LogIn, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { UserRole } from "@/types";
-
-const roles: { value: UserRole; label: string; description: string }[] = [
-  {
-    value: "employee",
-    label: "Employee",
-    description: "Basic access to chat and search",
-  },
-  {
-    value: "department_manager",
-    label: "Department Manager",
-    description: "View and manage department documents",
-  },
-  {
-    value: "director",
-    label: "Director",
-    description: "Manage documents, approve content, and view audit logs",
-  },
-  {
-    value: "admin_auditor",
-    label: "Administrator Auditor",
-    description: "Full system access including user management",
-  },
-];
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
 
-  const handleLogin = () => {
-    login(selectedRole);
-    navigate("/chat");
-  };
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate("/chat");
-    }
+    if (isAuthenticated) navigate("/chat");
   }, [isAuthenticated, navigate]);
 
   if (isAuthenticated) return null;
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await login(email.trim(), password);
+      navigate("/chat");
+    } catch (err: any) {
+      setError("Invalid email or password.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted/50 p-4">
@@ -61,51 +51,55 @@ export default function LoginPage() {
             <Building2 className="h-6 w-6 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">KnowledgeHub</CardTitle>
-          <CardDescription>
-            Enterprise Knowledge Management + RAG Assistant
-          </CardDescription>
+          <CardDescription>Enterprise Knowledge Management + RAG Assistant</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-muted-foreground">
-              Select role to demo:
-            </p>
-            {roles.map((role) => (
-              <label
-                key={role.value}
-                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-                  selectedRole === role.value
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:bg-muted/50"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="role"
-                  value={role.value}
-                  checked={selectedRole === role.value}
-                  onChange={() => setSelectedRole(role.value)}
-                  className="mt-1"
+
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email or username</Label>
+              <Input
+                id="email"
+                type="text"
+                placeholder="Enter your email or username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="At least 8 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="pr-10"
                 />
-                <div>
-                  <p className="font-medium">{role.label}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {role.description}
-                  </p>
-                </div>
-              </label>
-            ))}
-          </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
 
-          <Button onClick={handleLogin} className="w-full gap-2">
-            <LogIn className="h-4 w-4" />
-            Continue as {roles.find((r) => r.value === selectedRole)?.label}
-          </Button>
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
 
-          <p className="text-center text-xs text-muted-foreground">
-            This is a demo. In production, SSO/OIDC authentication would be
-            used.
-          </p>
+            <Button type="submit" className="w-full gap-2" disabled={loading}>
+              <LogIn className="h-4 w-4" />
+              {loading ? "Signing in..." : "Sign in"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>
