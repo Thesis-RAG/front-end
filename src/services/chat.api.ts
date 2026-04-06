@@ -141,3 +141,71 @@ export async function getListConversationMessage(
 
   return res.json();
 }
+
+export async function postMessageStream(
+  conversationId: string,
+  content: string,
+  token: string,
+  onToken: (text: string) => void,
+  onDone: (data: {
+    content: string;
+    sources: any[];
+    messageId: string;
+  }) => void,
+) {
+  const res = await fetch(
+    `${ENV.API_BASE_URL}/conversations/${conversationId}/messages/stream`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content }),
+    },
+  );
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const text = decoder.decode(value);
+    const lines = text.split("\n");
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      try {
+        const event = JSON.parse(line.slice(6));
+        if (event.type === "token") {
+          onToken(event.text);
+        } else if (event.type === "done") {
+          onDone(event);
+        }
+      } catch {}
+    }
+  }
+}
+
+
+export async function searchDocuments(
+  query: string,
+  mode: string,
+  token: string,
+  topK: number = 10,
+) {
+  const res = await fetch(`${ENV.API_BASE_URL}/search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ query, mode, top_k: topK }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}

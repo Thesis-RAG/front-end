@@ -14,6 +14,14 @@ const statusConfig: Record<
     label: "Draft",
     className: "bg-status-draft/15 text-status-draft border-status-draft/30",
   },
+  uploaded: {
+    label: "Uploaded",
+    className: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  },
+  processing: {                                    
+    label: "Processing",
+    className: "bg-purple-100 text-purple-700 border-purple-200",
+  },
   review: {
     label: "In Review",
     className: "bg-status-review/15 text-status-review border-status-review/30",
@@ -28,10 +36,17 @@ const statusConfig: Record<
     className:
       "bg-status-archived/15 text-status-archived border-status-archived/30",
   },
+  ready: {
+    className: "bg-blue-100 text-blue-700 border-blue-200",
+    label: "Ready",
+  },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
-  const config = statusConfig[status];
+  const config = statusConfig[status] ?? {
+    label: status,
+    className: "bg-gray-100 text-gray-600 border-gray-200",
+  };
 
   return (
     <span

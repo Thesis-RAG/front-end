@@ -21,7 +21,6 @@ export default function SettingsPage() {
       <PageHeader
         title="Settings"
         description="Configuration and Options"
-        breadcrumbs={[{ label: 'Settings' }]}
         actions={
           <Button className="gap-2">
             <Save className="h-4 w-4" />
@@ -142,9 +141,9 @@ export default function SettingsPage() {
               </div>
 
               <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Governance Note</AlertTitle>
-                <AlertDescription>
+                <AlertTriangle className="h-4 w-4 !text-yellow-600" />
+                <AlertTitle className="text-yellow-600">Governance Note</AlertTitle>
+                <AlertDescription className="text-yellow-600">
                   Approved-Only mode ensures users only see content that has been reviewed and
                   approved by Knowledge Managers. This is recommended for production environments.
                 </AlertDescription>

@@ -13,7 +13,7 @@ import {
 import { MessageSquare } from "lucide-react";
 import {
   createConversation,
-  postMessage,
+  postMessageStream,
   getListConversation,
   getListConversationMessage,
   updateConversation,
@@ -209,57 +209,66 @@ export default function ChatPage() {
     const tempUserId = `user-${Date.now()}`;
     const tempAssistantId = `assistant-${Date.now()}`;
 
-    const userMessage: ChatMessageType = {
-      id: tempUserId,
-      role: "user",
-      content,
-      timestamp: new Date().toISOString(),
-    };
-
-    const loadingMessage: ChatMessageType = {
-      id: tempAssistantId,
-      role: "assistant",
-      content: "",
-      timestamp: new Date().toISOString(),
-      isStreaming: true,
-      status: "loading",
-    };
-
-    setMessages((prev) => [...prev, userMessage, loadingMessage]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: tempUserId,
+        role: "user",
+        content,
+        timestamp: new Date().toISOString(),
+      },
+      {
+        id: tempAssistantId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date().toISOString(),
+        isStreaming: true,
+        status: "loading",
+      },
+    ]);
     setIsStreaming(true);
 
     try {
-      const result = await postMessage(conversationId, content, token);
-
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === tempAssistantId
-            ? {
-                ...m,
-                content: result.assistantMessage.content,
-                isStreaming: false,
-                citations: result.sources,
-                traceId: result.traceId.toString(36),
-                status: result.assistantMessage.status ?? "success",
-                timestamp: result.assistantMessage.createdAt,
-              }
-            : m,
-        ),
+      await postMessageStream(
+        conversationId!,
+        content,
+        token,
+        // onToken — cập nhật từng token
+        (text) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempAssistantId
+                ? { ...m, content: m.content + text }
+                : m,
+            ),
+          );
+        },
+        // onDone — finalize
+        (data) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempAssistantId
+                ? {
+                    ...m,
+                    content: data.content,
+                    isStreaming: false,
+                    status: "success",
+                    citations: data.sources,
+                  }
+                : m,
+            ),
+          );
+          setIsStreaming(false);
+        },
       );
     } catch (error) {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempAssistantId
-            ? {
-                ...m,
-                content: "Error response from API.",
-                isStreaming: false,
-                status: "error",
-              }
+            ? { ...m, content: "Error.", isStreaming: false, status: "error" }
             : m,
         ),
       );
-    } finally {
       setIsStreaming(false);
     }
   };

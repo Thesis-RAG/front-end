@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "@/hooks/use-toast";
 import {
   Search,
-  Filter,
-  X,
   FileText,
   ExternalLink,
   SlidersHorizontal,
@@ -29,20 +28,34 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { mockSearchResults } from "@/data/mockData";
-import {
-  SearchResult,
-  SearchMode,
-  DocumentStatus,
-  SensitivityLevel,
-} from "@/types";
-import { cn } from "@/lib/utils";
+import { SearchMode, DocumentStatus, SensitivityLevel } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { searchDocuments } from "@/services/chat.api";
+import { fetchDepartments, Department } from "@/services/departments.api";
+
+interface SearchChunk {
+  chunk_id: string;
+  document_text: string;
+  score: number;
+  semantic_score: number;
+  keyword_score: number;
+  sources: string[];
+  metadata: {
+    document_id: string;
+    document_title: string;
+    document_type: string;
+    sensitivity_level: string;
+    department_id: string;
+    page_start: number;
+    page_end: number;
+    chunk_index: number;
+  };
+}
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [searchMode, setSearchMode] = useState<SearchMode>("hybrid");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<SearchChunk[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const { token, hasPermission } = useAuth();
@@ -50,6 +63,8 @@ export default function SearchPage() {
   const hasLevelConfidential = hasPermission("documents.confidential");
   const hasLevelRestricted = hasPermission("documents.restricted");
   const hasLevelTopSecret = hasPermission("documents.top_secret");
+
+  const [departments, setDepartments] = useState<Department[]>([]);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<DocumentStatus | "all">(
@@ -59,25 +74,28 @@ export default function SearchPage() {
     SensitivityLevel | "all"
   >("all");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const filteredResults = results.filter((r) => {
+    const matchSensitivity =
+      sensitivityLevelFilter === "all" ||
+      r.metadata.sensitivity_level === sensitivityLevelFilter;
+    const matchDept =
+      departmentFilter === "all" ||
+      r.metadata.department_id === departmentFilter;
+    return matchSensitivity && matchDept;
+  });
 
   const handleSearch = async () => {
     if (!query.trim()) return;
-
     setIsSearching(true);
     setHasSearched(true);
-
-    // Simulate search
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    // Filter mock results based on query
-    const filtered = mockSearchResults.filter(
-      (r) =>
-        r.title.toLowerCase().includes(query.toLowerCase()) ||
-        r.snippet.toLowerCase().includes(query.toLowerCase()),
-    );
-
-    setResults(filtered.length > 0 ? filtered : mockSearchResults);
-    setIsSearching(false);
+    try {
+      const data = await searchDocuments(query, searchMode, token);
+      setResults(data);
+    } catch {
+      toast({ variant: "destructive", title: "Search failed" });
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -98,12 +116,17 @@ export default function SearchPage() {
     departmentFilter,
   ].filter((f) => f !== "all").length;
 
+  useEffect(() => {
+    fetchDepartments(token)
+      .then(setDepartments)
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Search"
         description="Keyword-based or semantic knowledge search"
-        breadcrumbs={[{ label: "Search" }]}
       />
 
       <div className="flex-1 overflow-auto p-6">
@@ -125,7 +148,7 @@ export default function SearchPage() {
               value={searchMode}
               onValueChange={(v) => setSearchMode(v as SearchMode)}
             >
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-36 text-[12px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -137,7 +160,7 @@ export default function SearchPage() {
 
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-2 text-[12px]">
                   <SlidersHorizontal className="h-4 w-4" />
                   Filters
                   {activeFiltersCount > 0 && (
@@ -152,12 +175,14 @@ export default function SearchPage() {
               </SheetTrigger>
               <SheetContent>
                 <SheetHeader>
-                  <SheetTitle>Search Filters</SheetTitle>
+                  <SheetTitle className="text-[16px]">
+                    Search Filters
+                  </SheetTitle>
                 </SheetHeader>
                 <div className="mt-6 space-y-6">
                   {canEdit && (
                     <div>
-                      <label className="text-sm font-medium">Status</label>
+                      <label className="text-sm font-medium">Department</label>
 
                       <Select
                         value={statusFilter}
@@ -165,15 +190,16 @@ export default function SearchPage() {
                           setStatusFilter(v as DocumentStatus | "all")
                         }
                       >
-                        <SelectTrigger className="mt-2">
+                        <SelectTrigger className="mt-2 text-[12.5px]">
                           <SelectValue placeholder="All statuses" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All statuses</SelectItem>
-                          <SelectItem value="approved">Approved</SelectItem>
-                          <SelectItem value="review">In Review</SelectItem>
-                          <SelectItem value="draft">Draft</SelectItem>
-                          <SelectItem value="archived">Archived</SelectItem>
+                          <SelectItem value="all">All Departments</SelectItem>
+                          {departments.map((d) => (
+                            <SelectItem key={d.id} value={d.id}>
+                              {d.name}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -189,12 +215,12 @@ export default function SearchPage() {
                         setSensitivityLevelFilter(v as SensitivityLevel | "all")
                       }
                     >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="All sensitivity levels" />
+                      <SelectTrigger className="mt-2 text-[12.5px]">
+                        <SelectValue placeholder="All Sensitivity Levels" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">
-                          All sensitivity levels
+                          All Sensitivity Levels
                         </SelectItem>
                         <SelectItem value="public">Public</SelectItem>
                         <SelectItem value="internal">Internal</SelectItem>
@@ -216,21 +242,23 @@ export default function SearchPage() {
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium">Department</label>
+                    <label className="text-sm font-medium">Status</label>
                     <Select
-                      value={departmentFilter}
-                      onValueChange={setDepartmentFilter}
+                      value={statusFilter}
+                      onValueChange={(v) =>
+                        setStatusFilter(v as DocumentStatus | "all")
+                      }
                     >
-                      <SelectTrigger className="mt-2">
-                        <SelectValue placeholder="All departments" />
+                      <SelectTrigger className="mt-2 text-[12.5px]">
+                        <SelectValue placeholder="All statuses" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All departments</SelectItem>
-                        <SelectItem value="HR">HR</SelectItem>
-                        <SelectItem value="IT">IT</SelectItem>
-                        <SelectItem value="Sales">Sales</SelectItem>
-                        <SelectItem value="Finance">Finance</SelectItem>
-                        <SelectItem value="Engineering">Engineering</SelectItem>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="uploaded">Uploaded</SelectItem>
+                        <SelectItem value="review">Review</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -251,6 +279,7 @@ export default function SearchPage() {
             <Button
               onClick={handleSearch}
               disabled={!query.trim() || isSearching}
+              className="text-[12px]"
             >
               {isSearching ? "Searching..." : "Search"}
             </Button>
@@ -261,7 +290,7 @@ export default function SearchPage() {
             <span>Mode:</span>
             <Badge variant="outline" className="font-normal">
               {searchMode === "hybrid"
-                ? "Hybrid (keyword + semantic)"
+                ? "Hybrid (Keyword + Semantic)"
                 : searchMode === "keyword"
                   ? "Keyword only"
                   : "Semantic only"}
@@ -287,11 +316,11 @@ export default function SearchPage() {
               results.length > 0 ? (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Found {results.length} results for "{query}"
+                    Found {filteredResults.length} results for "{query}"
                   </p>
-                  {results.map((result) => (
+                  {filteredResults.map((result, idx) => (
                     <SearchResultCard
-                      key={result.id}
+                      key={result.chunk_id ?? idx}
                       result={result}
                       query={query}
                     />
@@ -326,7 +355,7 @@ function SearchResultCard({
   result,
   query,
 }: {
-  result: SearchResult;
+  result: SearchChunk;
   query: string;
 }) {
   const highlightText = (text: string) => {
@@ -335,7 +364,7 @@ function SearchResultCard({
     const parts = text.split(regex);
     return parts.map((part, i) =>
       regex.test(part) ? (
-        <mark key={i} className="bg-citation-bg text-foreground rounded px-0.5">
+        <mark key={i} className="bg-yellow-100 text-foreground rounded px-0.5">
           {part}
         </mark>
       ) : (
@@ -350,43 +379,53 @@ function SearchResultCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-medium text-foreground">
-              {highlightText(result.title)}
+              {result.metadata.document_title}
             </h3>
-            <StatusBadge status={result.status} />
-            <SensitivityLevelBadge level={result.sensitivity_level} />
+            <SensitivityLevelBadge
+              level={result.metadata.sensitivity_level as SensitivityLevel}
+            />
+            <Badge variant="outline" className="text-xs font-normal">
+              p.{result.metadata.page_start}–{result.metadata.page_end}
+            </Badge>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {result.sectionPath}
-          </p>
+          <div className="mt-1 flex items-center gap-2">
+            <Badge variant="secondary" className="text-[10px] font-semibold">
+              chunk #{result.metadata.chunk_index}
+            </Badge>
+            {result.sources.map((s) => (
+              <Badge
+                key={s}
+                variant="outline"
+                className="text-[10px] font-semibold capitalize"
+              >
+                {s}
+              </Badge>
+            ))}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">Relevance</div>
+            <div className="text-xs text-muted-foreground">Score</div>
             <div className="font-medium text-sm">
               {Math.round(result.score * 100)}%
             </div>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <a href={`/documents/${result.documentId}`}>
+            <a href={`/documents/${result.metadata.document_id}`}>
               <ExternalLink className="h-4 w-4" />
             </a>
           </Button>
         </div>
       </div>
 
-      <p className="mt-3 text-sm text-muted-foreground line-clamp-3">
-        {highlightText(result.snippet)}
+      <p className="mt-3 text-[13px] text-muted-foreground line-clamp-4">
+        {highlightText(result.document_text)}
       </p>
 
-      <div className="mt-3 flex items-center gap-2 flex-wrap">
-        {result.tags.map((tag) => (
-          <Badge key={tag} variant="secondary" className="text-xs">
-            {tag}
-          </Badge>
-        ))}
-        <span className="text-xs text-muted-foreground ml-auto">
-          Updated {new Date(result.updatedAt).toLocaleDateString()}
-        </span>
+      <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+        <span>Semantic: {Math.round(result.semantic_score * 100)}%</span>
+        <span>·</span>
+        <span>Keyword: {Math.round(result.keyword_score * 100)}%</span>
       </div>
     </div>
   );

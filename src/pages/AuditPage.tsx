@@ -1,9 +1,20 @@
-import { useState } from 'react';
-import { Search, Download, Filter, ExternalLink, CheckCircle, AlertTriangle, ShieldX, Copy, Check } from 'lucide-react';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from "react";
+import {
+  Search,
+  Download,
+  CheckCircle,
+  AlertTriangle,
+  ShieldX,
+  Copy,
+  Check,
+  Clock,
+  Loader2,
+  XCircle,
+} from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -11,46 +22,62 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { mockAuditLogs, mockJobs } from '@/data/mockData';
-import { AuditLogEntry, Job } from '@/types';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/tooltip";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
+import {
+  fetchTraces,
+  fetchJobs,
+  retryJob,
+  cancelJob,
+  TraceRecord,
+  JobRecord,
+} from "@/services/audit.api";
 
+// ── helpers ───────────────────────────────────────────────────────────────────
+const truncateMiddle = (s: string, head = 6, tail = 4) =>
+  s.length <= head + tail + 3 ? s : `${s.slice(0, head)}...${s.slice(-tail)}`;
+
+const formatDate = (s?: string | null) =>
+  s ? new Date(s).toLocaleString("vi-VN") : "—";
+
+// ── page ─────────────────────────────────────────────────────────────────────
 export default function AuditPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Audit & Jobs"
         description="Query and processing monitoring"
-        breadcrumbs={[{ label: 'Audit & Jobs' }]}
       />
-
       <div className="flex-1 overflow-auto">
         <Tabs defaultValue="queries" className="h-full flex flex-col">
           <div className="border-b border-border px-6">
             <TabsList className="mt-2">
-              <TabsTrigger value="queries">Query Logs</TabsTrigger>
-              <TabsTrigger value="jobs">Job Monitor</TabsTrigger>
+              <TabsTrigger className="text-[12px]" value="queries">
+                Query Logs
+              </TabsTrigger>
+              <TabsTrigger className="text-[12px]" value="jobs">
+                Job Monitor
+              </TabsTrigger>
             </TabsList>
           </div>
-
           <TabsContent value="queries" className="flex-1 p-6 mt-0">
             <QueryLogsTab />
           </TabsContent>
-
           <TabsContent value="jobs" className="flex-1 p-6 mt-0">
             <JobsTab />
           </TabsContent>
@@ -60,151 +87,220 @@ export default function AuditPage() {
   );
 }
 
+// ── Query Logs ────────────────────────────────────────────────────────────────
 function QueryLogsTab() {
-  const [logs] = useState<AuditLogEntry[]>(mockAuditLogs);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const { token } = useAuth();
+  const [traces, setTraces] = useState<TraceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const filteredLogs = logs.filter((log) => {
-    const matchesSearch =
-      log.query.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.traceId.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || log.status === statusFilter;
-    return matchesSearch && matchesStatus;
+  useEffect(() => {
+    fetchTraces(token)
+      .then(setTraces)
+      .catch(() =>
+        toast({ variant: "destructive", title: "Failed to load traces" }),
+      )
+      .finally(() => setLoading(false));
+  }, []);
+
+  const filtered = traces.filter((t) => {
+    const q = searchQuery.toLowerCase();
+    const matchSearch =
+      !q ||
+      (t.user_input ?? "").toLowerCase().includes(q) ||
+      (t.trace_id ?? "").toLowerCase().includes(q);
+    const matchStatus = statusFilter === "all" || t.status === statusFilter;
+    return matchSearch && matchStatus;
   });
 
-  const copyTraceId = (traceId: string) => {
-    navigator.clipboard.writeText(traceId);
-    setCopiedId(traceId);
+  const copyTraceId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('vi-VN');
+  const statusConfig: Record<
+    string,
+    { icon: React.ReactNode; label: string; className: string }
+  > = {
+    completed: {
+      icon: <CheckCircle className="h-4 w-4 text-green-600" />,
+      label: "Completed",
+      className:
+        "bg-green-100 text-green-700 border border-green-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+    },
+    "no-permission": {
+      icon: <ShieldX className="h-4 w-4 text-red-600" />,
+      label: "No Permission",
+      className:
+        "bg-red-100 text-red-700 border border-red-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+    },
+    "no-answer": {
+      icon: <AlertTriangle className="h-4 w-4 text-yellow-600" />,
+      label: "No Answer",
+      className:
+        "bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+    },
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'success':
-        return <CheckCircle className="h-4 w-4 text-status-approved" />;
-      case 'no-answer':
-        return <AlertTriangle className="h-4 w-4 text-status-draft" />;
-      case 'no-permission':
-        return <ShieldX className="h-4 w-4 text-destructive" />;
-      default:
-        return null;
-    }
+  const getLatency = (timings: any): string => {
+    if (!timings) return "—";
+    const total = timings.total_ms ?? timings.total ?? null;
+    return total != null ? `${Math.round(total)}ms` : "—";
   };
 
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case 'success':
-        return 'Success';
-      case 'no-answer':
-        return 'No Answer';
-      case 'no-permission':
-        return 'No Permission';
-      default:
-        return status;
-    }
+  const getDocs = (sources: any[]): number => {
+    if (!Array.isArray(sources)) return 0;
+    return new Set(sources.map((s) => s.metadata?.document_id).filter(Boolean))
+      .size;
   };
+
+  const getCitations = (sources: any[]): number =>
+    Array.isArray(sources) ? sources.length : 0;
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search queries, users, trace IDs..."
-            className="pl-10"
+            placeholder="Search queries, trace IDs..."
+            className="pl-10 placeholder:text-[12.5px]"
           />
         </div>
-
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger className="w-40 text-[12.5px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="success">Success</SelectItem>
-            <SelectItem value="no-answer">No Answer</SelectItem>
-            <SelectItem value="no-permission">No Permission</SelectItem>
+            <SelectItem className="text-[12.5px]" value="all">
+              All statuses
+            </SelectItem>
+            <SelectItem className="text-[12.5px]" value="completed">
+              Completed
+            </SelectItem>
+            <SelectItem className="text-[12.5px]" value="no-answer">
+              No Answer
+            </SelectItem>
+            <SelectItem className="text-[12.5px]" value="no-permission">
+              No Permission
+            </SelectItem>
           </SelectContent>
         </Select>
-
-        <Button variant="outline" className="gap-2">
-          <Download className="h-4 w-4" />
-          Export
+        <Button variant="outline" className="gap-2 text-[12.5px]">
+          <Download className="h-4 w-4" /> Export
         </Button>
       </div>
 
-      {/* Table */}
       <div className="rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Timestamp</TableHead>
-              <TableHead>User</TableHead>
-              <TableHead className="w-[30%]">Query</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Docs</TableHead>
-              <TableHead>Citations</TableHead>
-              <TableHead>Latency</TableHead>
-              <TableHead>Trace ID</TableHead>
+              <TableHead className="font-bold text-black">Timestamp</TableHead>
+              <TableHead className="font-bold text-black">User ID</TableHead>
+              <TableHead className="font-bold text-black w-[35%]">
+                Query
+              </TableHead>
+              <TableHead className="font-bold text-black">Status</TableHead>
+              <TableHead className="font-bold text-black">Docs</TableHead>
+              <TableHead className="font-bold text-black">Citations</TableHead>
+              <TableHead className="font-bold text-black">Latency</TableHead>
+              <TableHead className="font-bold text-black">Trace ID</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredLogs.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {formatDate(log.timestamp)}
-                </TableCell>
-                <TableCell className="font-medium">{log.userName}</TableCell>
-                <TableCell className="max-w-[300px] truncate" title={log.query}>
-                  {log.query}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    {getStatusIcon(log.status)}
-                    <span className="text-sm">{getStatusLabel(log.status)}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-center">{log.documentsRetrieved}</TableCell>
-                <TableCell className="text-center">{log.citations}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {log.latencyMs}ms
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                      {log.traceId.slice(0, 12)}...
-                    </code>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6"
-                          onClick={() => copyTraceId(log.traceId)}
-                        >
-                          {copiedId === log.traceId ? (
-                            <Check className="h-3 w-3" />
-                          ) : (
-                            <Copy className="h-3 w-3" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Copy trace ID</TooltipContent>
-                    </Tooltip>
-                  </div>
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={8}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  Loading...
                 </TableCell>
               </TableRow>
-            ))}
+            ) : filtered.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={8}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  No records found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filtered.map((t) => {
+                const sc = statusConfig[t.status] ?? {
+                  icon: null,
+                  label: t.status,
+                  className:
+                    "bg-gray-100 text-gray-700 border border-gray-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                };
+                return (
+                  <TableRow key={t.id}>
+                    <TableCell className="text-[11.5px] text-muted-foreground whitespace-nowrap">
+                      {formatDate(t.created_at)}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono">
+                      {truncateMiddle(t.user_id ?? "", 8, 4)}
+                    </TableCell>
+                    <TableCell
+                      className="max-w-[300px] truncate text-[12.5px]"
+                      title={t.user_input ?? ""}
+                    >
+                      {t.user_input ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div
+                        className={cn(
+                          "inline-flex items-center gap-1.5",
+                          sc.className,
+                        )}
+                      >
+                        {sc.icon}
+                        <span>{sc.label}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center text-[12.5px] font-normal">
+                      {getDocs(t.retrieved_sources)}
+                    </TableCell>
+                    <TableCell className="text-center text-[12.5px] font-normal">
+                      {getCitations(t.retrieved_sources)}
+                    </TableCell>
+                    <TableCell className="text-center text-muted-foreground text-[12.5px]">
+                      {getLatency(t.timings)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                          {(t.trace_id ?? "").slice(0, 12)}...
+                        </code>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => copyTraceId(t.trace_id)}
+                            >
+                              {copiedId === t.trace_id ? (
+                                <Check className="h-3 w-3" />
+                              ) : (
+                                <Copy className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Copy trace ID</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </div>
@@ -212,49 +308,118 @@ function QueryLogsTab() {
   );
 }
 
+// ── Job Monitor ───────────────────────────────────────────────────────────────
 function JobsTab() {
-  const [jobs] = useState<Job[]>(mockJobs);
+  const { token } = useAuth();
+  const [jobs, setJobs] = useState<JobRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleString('vi-VN');
+  const load = () => {
+    setLoading(true);
+    fetchJobs(token)
+      .then(setJobs)
+      .catch(() =>
+        toast({ variant: "destructive", title: "Failed to load jobs" }),
+      )
+      .finally(() => setLoading(false));
   };
 
-  const getStatusBadge = (status: Job['status']) => {
-    const config = {
-      queued: { className: 'bg-muted text-muted-foreground', label: 'Queued' },
-      running: { className: 'bg-primary/15 text-primary animate-pulse', label: 'Running' },
-      succeeded: { className: 'bg-status-approved/15 text-status-approved', label: 'Succeeded' },
-      failed: { className: 'bg-destructive/15 text-destructive', label: 'Failed' },
-    };
-    const { className, label } = config[status];
-    return <Badge className={cn('font-normal', className)}>{label}</Badge>;
+  useEffect(() => {
+    load();
+  }, []);
+
+  const handleRetry = async (jobId: string) => {
+    try {
+      await retryJob(jobId, token);
+      toast({ variant: "success", title: "Job requeued" });
+      load();
+    } catch {
+      toast({ variant: "destructive", title: "Retry failed" });
+    }
   };
 
-  const getTypeBadge = (type: Job['type']) => {
-    const labels: Record<Job['type'], string> = {
-      ingestion: 'Ingestion',
-      indexing: 'Indexing',
-      embedding: 'Embedding',
-      cleanup: 'Cleanup',
-    };
+  const handleCancel = async (jobId: string) => {
+    try {
+      await cancelJob(jobId, token);
+      toast({ variant: "success", title: "Job cancelled" });
+      load();
+    } catch {
+      toast({ variant: "destructive", title: "Cancel failed" });
+    }
+  };
+
+  const statusConfig: Record<
+    string,
+    { className: string; label: string; icon: React.ReactNode }
+  > = {
+    queued: {
+      icon: <Clock className="h-3 w-3" />,
+      className:
+        "bg-muted text-muted-foreground border border-border hover:bg-muted",
+      label: "Queued",
+    },
+    running: {
+      icon: <Loader2 className="h-3 w-3 animate-spin" />,
+      className:
+        "bg-primary/15 text-primary border border-primary/30 hover:bg-primary/15",
+      label: "Running",
+    },
+    succeeded: {
+      icon: <CheckCircle className="h-3 w-3" />,
+      className:
+        "bg-green-100 text-green-700 border border-green-200 hover:bg-green-100",
+      label: "Succeeded",
+    },
+    failed: {
+      icon: <XCircle className="h-3 w-3" />,
+      className:
+        "bg-red-100 text-red-700 border border-red-200 hover:bg-red-100",
+      label: "Failed",
+    },
+  };
+
+  const statColors: Record<string, { text: string; count: string }> = {
+    queued: { text: "text-muted-foreground", count: "text-muted-foreground" },
+    running: { text: "text-yellow-500", count: "text-yellow-600" },
+    succeeded: { text: "text-green-600", count: "text-green-700" },
+    failed: { text: "text-red-500", count: "text-red-700" },
+  };
+
+  const formatDocLabel = (job: JobRecord) => {
+    const title = job.doc_title ?? job.document_id ?? "";
+    const ver = job.version_no != null ? job.version_no : null;
     return (
-      <Badge variant="outline" className="font-normal">
-        {labels[type]}
-      </Badge>
+      <span className="text-[12.5px]">
+        {title}
+        {ver != null && (
+          <code className="ml-1 text-muted-foreground font-mono font-bold">
+            (v{ver})
+          </code>
+        )}
+      </span>
     );
   };
+
+  const shortId = (id: string) =>
+    id.length > 10 ? `${id.slice(0, 6)}...${id.slice(-4)}` : id;
+
+  const statuses = ["queued", "running", "succeeded", "failed"] as const;
 
   return (
     <div className="space-y-4">
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
-        {['queued', 'running', 'succeeded', 'failed'].map((status) => {
-          const count = jobs.filter((j) => j.status === status).length;
+        {statuses.map((s) => {
+          const c = statColors[s];
           return (
-            <div key={status} className="rounded-lg border border-border bg-card p-4">
-              <p className="text-sm text-muted-foreground capitalize">{status}</p>
-              <p className="mt-1 text-2xl font-semibold">{count}</p>
+            <div
+              key={s}
+              className="rounded-lg border border-border bg-card p-4"
+            >
+              <p className={cn("text-sm capitalize font-medium", c.text)}>{s}</p>
+              <p className={cn("mt-1 text-2xl font-semibold", c.count)}>
+                {jobs.filter((j) => j.status === s).length}
+              </p>
             </div>
           );
         })}
@@ -265,63 +430,130 @@ function JobsTab() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Job ID</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Document</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Retries</TableHead>
-              <TableHead>Started</TableHead>
-              <TableHead>Ended</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead className="text-black font-bold">Job ID</TableHead>
+              <TableHead className="text-black font-bold">Type</TableHead>
+              <TableHead className="text-black font-bold w-[40%]">
+                Document
+              </TableHead>
+              <TableHead className="text-black font-bold">Status</TableHead>
+              <TableHead className="text-black font-bold">Retries</TableHead>
+              <TableHead className="text-black font-bold">Started</TableHead>
+              <TableHead className="text-black font-bold">Ended</TableHead>
+              <TableHead className="text-black font-bold w-[8%]">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {jobs.map((job) => (
-              <TableRow key={job.id}>
-                <TableCell>
-                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{job.id}</code>
-                </TableCell>
-                <TableCell>{getTypeBadge(job.type)}</TableCell>
-                <TableCell>
-                  {job.documentId && (
-                    <div className="text-sm">
-                      <code className="text-xs">{job.documentId.slice(0, 8)}...</code>
-                      {job.versionId && (
-                        <span className="text-muted-foreground ml-1">({job.versionId})</span>
-                      )}
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell>{getStatusBadge(job.status)}</TableCell>
-                <TableCell className="text-center">{job.retryCount}</TableCell>
-                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {formatDate(job.startedAt)}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                  {formatDate(job.endedAt)}
-                </TableCell>
-                <TableCell>
-                  {job.status === 'failed' && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          Retry
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
-                        <p className="font-medium">Error:</p>
-                        <p className="text-xs">{job.error}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                  {job.status === 'running' && (
-                    <Button variant="outline" size="sm">
-                      Cancel
-                    </Button>
-                  )}
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={8}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  Loading...
                 </TableCell>
               </TableRow>
-            ))}
+            ) : jobs.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={8}
+                  className="h-32 text-center text-muted-foreground"
+                >
+                  No jobs found
+                </TableCell>
+              </TableRow>
+            ) : (
+              jobs.map((job) => {
+                const sc = statusConfig[job.status] ?? {
+                  icon: null,
+                  className:
+                    "bg-muted text-muted-foreground border border-border hover:bg-muted",
+                  label: job.status,
+                };
+                return (
+                  <TableRow key={job.id}>
+                    <TableCell>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                            {shortId(job.id)}
+                          </code>
+                        </TooltipTrigger>
+                        <TooltipContent>{job.id}</TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className="font-normal capitalize"
+                      >
+                        {job.job_type.replace("_", " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <span className="text-sm">{formatDocLabel(job)}</span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {job.doc_title ?? job.document_id ?? "—"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        className={cn(
+                          "font-normal inline-flex items-center gap-1",
+                          sc.className,
+                        )}
+                      >
+                        {sc.icon}
+                        {sc.label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center text-[12px]">
+                      {job.retry_count}
+                    </TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground whitespace-nowrap">
+                      {formatDate(job.started_at ?? job.created_at)}
+                    </TableCell>
+                    <TableCell className="text-[12px] text-muted-foreground whitespace-nowrap">
+                      {formatDate(job.finished_at)}
+                    </TableCell>
+                    <TableCell>
+                      {job.status === "running" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCancel(job.id)}
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                      {job.status === "failed" && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRetry(job.id)}
+                            >
+                              Retry
+                            </Button>
+                          </TooltipTrigger>
+                          {job.error_message && (
+                            <TooltipContent className="max-w-xs">
+                              <p className="text-xs">{job.error_message}</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
           </TableBody>
         </Table>
       </div>

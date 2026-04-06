@@ -80,14 +80,19 @@ export function ChatMessage({
                 : "bg-background text-gray-900",
           )}
         >
-          {message.isStreaming ? (
+          {message.isStreaming && !message.content ? (
             <div className="mt-3 flex translate-y-1 items-center gap-2">
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" />
             </div>
           ) : (
-            <div>{message.content}</div>
+            <div>
+              {message.content}
+              {message.isStreaming && (
+                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-gray-600" />
+              )}
+            </div>
           )}
         </div>
 
