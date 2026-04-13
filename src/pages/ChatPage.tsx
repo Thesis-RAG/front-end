@@ -10,7 +10,7 @@ import {
   ChatMessage as ChatMessageType,
   Citation,
 } from "@/types";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Filter, X, BookOpen, Bot } from "lucide-react";
 import {
   createConversation,
   postMessageStream,
@@ -20,11 +20,19 @@ import {
   deleteConversation,
 } from "@/services/chat.api";
 import { useAuth } from "@/contexts/AuthContext";
+import { fetchProjects, Project } from "@/services/projects.api";
+import { fetchDepartments, Department } from "@/services/departments.api";
+import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
   const { token, user } = useAuth();
-
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
+  const [availableDepts, setAvailableDepts] = useState<Department[]>([]);
+  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
+  const [selectedDeptIds, setSelectedDeptIds] = useState<string[]>([]);
+  const [deptFilterOn, setDeptFilterOn] = useState(false);
+  const [chatMode, setChatMode] = useState<"rag" | "chatbot">("rag");
 
   const handleGetConversation = async (userId: string) => {
     const result = await getListConversation(userId, token);
@@ -99,6 +107,18 @@ export default function ChatPage() {
     load();
     // only run on mount / when user or token changes
   }, [user.id, token]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchProjects(token)
+      .then(setAvailableProjects)
+      .catch(() => {});
+    if (["admin_auditor", "director"].includes(user.role)) {
+      fetchDepartments(token)
+        .then(setAvailableDepts)
+        .catch(() => {});
+    }
+  }, [user, token]);
 
   const [activeConversationId, setActiveConversationId] = useState<
     string | undefined
@@ -260,6 +280,12 @@ export default function ChatPage() {
           );
           setIsStreaming(false);
         },
+        {
+          project_ids:
+            selectedProjectIds.length > 0 ? selectedProjectIds : undefined,
+          department_ids: getEffectiveDeptIds(),
+        },
+        chatMode,
       );
     } catch (error) {
       setMessages((prev) =>
@@ -289,6 +315,15 @@ export default function ChatPage() {
     //TODO: In real app, send to backend
   };
 
+  const getEffectiveDeptIds = () => {
+    if (!deptFilterOn) return undefined;
+    if (["admin_auditor", "director"].includes(user?.role ?? "")) {
+      return selectedDeptIds.length > 0 ? selectedDeptIds : undefined;
+    }
+    // employee/dept_manager → dùng dept của mình
+    return user?.department ? [user.department] : undefined;
+  };
+
   return (
     <div className="flex h-full">
       {/* Conversations sidebar */}
@@ -306,14 +341,25 @@ export default function ChatPage() {
         {messages.length === 0 ? (
           /* Empty state */
           <div className="flex flex-1 flex-col items-center justify-center p-8">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-              <MessageSquare className="h-8 w-8 text-primary" />
+            <div
+              className={cn(
+                "flex h-16 w-16 items-center justify-center rounded-full",
+                chatMode === "rag" ? "bg-primary/10" : "bg-teal-500/10",
+              )}
+            >
+              {chatMode === "rag" ? (
+                <BookOpen className="h-8 w-8 text-primary" />
+              ) : (
+                <Bot className="h-8 w-8 text-teal-600" />
+              )}
             </div>
-            <h2 className="mt-4 text-xl font-semibold">Chat Assistant</h2>
+            <h2 className="mt-4 text-xl font-semibold">
+              {chatMode === "rag" ? "RAG SMEs Assistant" : "Chatbot Assistant"}
+            </h2>
             <p className="mt-2 max-w-md text-center text-muted-foreground">
-              Ask questions about processes, policies, and enterprise knowledge.
-              I will answer based on approved documents and provide source
-              citations.
+              {chatMode === "rag"
+                ? "Ask questions about processes, policies, and enterprise knowledge. Answers are based on approved documents with source citations."
+                : "General-purpose AI assistant. Ask me anything — not limited to company documents."}
             </p>
           </div>
         ) : (
@@ -332,12 +378,35 @@ export default function ChatPage() {
             </div>
           </ScrollArea>
         )}
-
-        {/* Input */}
         <ChatInput
           onSend={handleSendMessage}
           onStop={handleStopStreaming}
           isStreaming={isStreaming}
+          availableProjects={availableProjects}
+          availableDepts={availableDepts}
+          selectedProjectIds={selectedProjectIds}
+          selectedDeptIds={selectedDeptIds}
+          deptFilterOn={deptFilterOn}
+          userRole={user?.role ?? ""}
+          activeFilterCount={selectedProjectIds.length + (deptFilterOn ? 1 : 0)}
+          chatMode={chatMode}
+          onToggleProject={(id) =>
+            setSelectedProjectIds((prev) =>
+              prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+            )
+          }
+          onToggleDept={(id) =>
+            setSelectedDeptIds((prev) =>
+              prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
+            )
+          }
+          onToggleDeptFilter={() => {
+            setDeptFilterOn((v) => !v);
+            if (deptFilterOn) setSelectedDeptIds([]);
+          }}
+          onToggleMode={() =>
+            setChatMode((m) => (m === "rag" ? "chatbot" : "rag"))
+          }
         />
       </div>
 
@@ -346,6 +415,7 @@ export default function ChatPage() {
         <CitationsPanel
           citation={selectedCitation}
           onClose={() => setSelectedCitation(null)}
+          token={token}
         />
       )}
     </div>

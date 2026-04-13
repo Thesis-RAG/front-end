@@ -1,17 +1,24 @@
-import { X, FileText, ExternalLink, Copy, Check } from "lucide-react";
+import { X, FileText, ExternalLink, Copy, Check, Eye } from "lucide-react";
 import { useState } from "react";
 import { Citation } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
+import { openDocumentFile } from "@/services/documents.api";
 
 interface CitationsPanelProps {
   citation: Citation | null;
   onClose: () => void;
+  token: string; // ← thêm
 }
 
-export function CitationsPanel({ citation, onClose }: CitationsPanelProps) {
+export function CitationsPanel({
+  citation,
+  onClose,
+  token,
+}: CitationsPanelProps) {
   const [copied, setCopied] = useState(false);
+  const [opening, setOpening] = useState(false);
 
   if (!citation) return null;
 
@@ -21,6 +28,21 @@ export function CitationsPanel({ citation, onClose }: CitationsPanelProps) {
     );
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleOpenFile = async () => {
+    if (!citation.versionId) {
+      toast({ variant: "destructive", title: "No file version available" });
+      return;
+    }
+    setOpening(true);
+    try {
+      await openDocumentFile(citation.documentId, citation.versionId, token);
+    } catch {
+      toast({ variant: "destructive", title: "Cannot open document" });
+    } finally {
+      setOpening(false);
+    }
   };
 
   return (
@@ -43,7 +65,6 @@ export function CitationsPanel({ citation, onClose }: CitationsPanelProps) {
 
       {/* Content */}
       <ScrollArea className="flex-1 p-4">
-        {/* Document info */}
         <div className="space-y-4">
           <div>
             <h3 className="font-semibold text-foreground">
@@ -54,7 +75,6 @@ export function CitationsPanel({ citation, onClose }: CitationsPanelProps) {
             </p>
           </div>
 
-          {/* IDs */}
           <div className="flex flex-wrap gap-2 text-xs">
             <div className="flex items-center gap-1.5 rounded-md bg-muted px-2 py-1">
               <span className="text-muted-foreground">Doc:</span>
@@ -83,7 +103,6 @@ export function CitationsPanel({ citation, onClose }: CitationsPanelProps) {
             </Button>
           </div>
 
-          {/* Relevance score */}
           {citation.relevance && (
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Relevance:</span>
@@ -99,7 +118,6 @@ export function CitationsPanel({ citation, onClose }: CitationsPanelProps) {
             </div>
           )}
 
-          {/* Snippet */}
           <div>
             <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Highlighted Excerpt
@@ -109,7 +127,6 @@ export function CitationsPanel({ citation, onClose }: CitationsPanelProps) {
             </div>
           </div>
 
-          {/* Context (mock) */}
           <div>
             <p className="mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Surrounding Context
@@ -131,16 +148,15 @@ export function CitationsPanel({ citation, onClose }: CitationsPanelProps) {
       </ScrollArea>
 
       {/* Footer */}
-      <div className="border-t border-border p-4">
-        <Button className="w-full gap-2" variant="outline" asChild>
-          <a
-            href={`/documents/${citation.documentId}`}
-            target="_blank"
-            rel="noopener"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Open Full Document
-          </a>
+      <div className="border-t border-border p-4 flex flex-col gap-2">
+        {/* Open file — giống DocumentsPage */}
+        <Button
+          className="w-full gap-2"
+          onClick={handleOpenFile}
+          disabled={opening || !citation.versionId}
+        >
+          <ExternalLink className="h-4 w-4" />
+          {opening ? "Opening..." : "Open Document File"}
         </Button>
       </div>
     </div>

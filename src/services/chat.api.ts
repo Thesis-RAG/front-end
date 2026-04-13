@@ -152,6 +152,8 @@ export async function postMessageStream(
     sources: any[];
     messageId: string;
   }) => void,
+  filters?: { project_ids?: string[]; department_ids?: string[] },
+  mode: "rag" | "chatbot" = "rag",
 ) {
   const res = await fetch(
     `${ENV.API_BASE_URL}/conversations/${conversationId}/messages/stream`,
@@ -161,7 +163,12 @@ export async function postMessageStream(
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({
+        content,
+        project_ids: filters?.project_ids ?? null,
+        department_ids: filters?.department_ids ?? null,
+        mode,
+      }),
     },
   );
 
@@ -190,7 +197,6 @@ export async function postMessageStream(
     }
   }
 }
-
 
 export async function searchDocuments(
   query: string,
