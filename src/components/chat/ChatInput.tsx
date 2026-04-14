@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Square, Paperclip } from "lucide-react";
+import { Send, Square, SlidersHorizontal, Bot, BookOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ChatFilter } from "@/components/chat/ChatFilter";
+import { Project } from "@/services/projects.api";
+import { Department } from "@/services/departments.api";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -9,6 +12,19 @@ interface ChatInputProps {
   isStreaming?: boolean;
   disabled?: boolean;
   placeholder?: string;
+  // Filter props
+  availableProjects: Project[];
+  availableDepts: Department[];
+  selectedProjectIds: string[];
+  selectedDeptIds: string[];
+  deptFilterOn: boolean;
+  userRole: string;
+  activeFilterCount: number;
+  chatMode: "rag" | "chatbot";
+  onToggleProject: (id: string) => void;
+  onToggleDept: (id: string) => void;
+  onToggleDeptFilter: () => void;
+  onToggleMode: () => void;
 }
 
 export function ChatInput({
@@ -17,9 +33,23 @@ export function ChatInput({
   isStreaming = false,
   disabled = false,
   placeholder = "Ask questions about enterprise knowledge...",
+  availableProjects,
+  availableDepts,
+  selectedProjectIds,
+  selectedDeptIds,
+  deptFilterOn,
+  userRole,
+  activeFilterCount,
+  chatMode,
+  onToggleProject,
+  onToggleDept,
+  onToggleDeptFilter,
+  onToggleMode,
 }: ChatInputProps) {
   const [message, setMessage] = useState("");
+  const [showFilter, setShowFilter] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -27,6 +57,17 @@ export function ChatInput({
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [message]);
+
+  // Đóng filter khi click ra ngoài
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
+        setShowFilter(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const handleSubmit = () => {
     if (message.trim() && !disabled && !isStreaming) {
@@ -48,6 +89,34 @@ export function ChatInput({
   return (
     <div className="border-t border-border bg-background p-4">
       <div className="mx-auto max-w-3xl">
+        {/* Mode toggle */}
+        <div className="flex items-center gap-2 mb-2">
+          <button
+            onClick={onToggleMode}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors border",
+              chatMode === "rag"
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "bg-muted text-muted-foreground border-border hover:bg-muted/80",
+            )}
+          >
+            <BookOpen className="h-3 w-3" />
+            RAG SMEs
+          </button>
+          <button
+            onClick={onToggleMode}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors border",
+              chatMode === "chatbot"
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "bg-muted text-muted-foreground border-border hover:bg-muted/80",
+            )}
+          >
+            <Bot className="h-3 w-3" />
+            Chatbot
+          </button>
+        </div>
+
         <div className="relative flex items-end gap-2 rounded-lg border border-input bg-card p-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
           <textarea
             ref={textareaRef}
@@ -64,6 +133,44 @@ export function ChatInput({
           />
 
           <div className="flex items-center gap-1">
+            {/* Filter button */}
+            {chatMode === "rag" && (
+              <div className="relative" ref={filterRef}>
+                <button
+                  onClick={() => setShowFilter((v) => !v)}
+                  className={cn(
+                    "relative h-9 w-9 flex items-center justify-center rounded-md transition-colors",
+                    showFilter || activeFilterCount > 0
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
+                  {activeFilterCount > 0 && (
+                    <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-medium">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+
+                {showFilter && (
+                  <ChatFilter
+                    availableProjects={availableProjects}
+                    availableDepts={availableDepts}
+                    selectedProjectIds={selectedProjectIds}
+                    selectedDeptIds={selectedDeptIds}
+                    deptFilterOn={deptFilterOn}
+                    userRole={userRole}
+                    onToggleProject={onToggleProject}
+                    onToggleDept={onToggleDept}
+                    onToggleDeptFilter={onToggleDeptFilter}
+                    onClose={() => setShowFilter(false)}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Send / Stop */}
             {isStreaming ? (
               <Button
                 variant="ghost"
@@ -88,8 +195,9 @@ export function ChatInput({
         </div>
 
         <p className="mt-2 text-center text-xs text-muted-foreground">
-          Answers are generated from the knowledge base. Always verify the cited
-          sources.
+          {chatMode === "rag"
+            ? "Answers are generated from the knowledge base. Always verify the cited sources."
+            : "General AI assistant mode. Answers are not based on company documents."}
         </p>
       </div>
     </div>

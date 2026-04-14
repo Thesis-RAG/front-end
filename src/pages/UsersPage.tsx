@@ -228,7 +228,8 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
       const matchSearch =
         !q ||
         u.name.toLowerCase().includes(q) ||
-        u.email.toLowerCase().includes(q);
+        u.email.toLowerCase().includes(q) ||
+        u.id.toLowerCase().includes(q);
       const matchRole = filterRole === "__all__" || u.role === filterRole;
       const matchDept =
         filterDept === "__all__" || u.department_name === filterDept;
@@ -713,7 +714,11 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
         fetchUsers(token),
         fetchProjectUsers(proj.id, token),
       ]);
-      setAvailableUsers(allUsers.filter(u => u.role !== "admin_auditor" && u.role !== "director"));
+      setAvailableUsers(
+        allUsers.filter(
+          (u) => u.role !== "admin_auditor" && u.role !== "director",
+        ),
+      );
       setSelectedUserIds(new Set(projUsers.map((u) => u.id)));
       setOpenUsersId(proj.id);
     } catch {
