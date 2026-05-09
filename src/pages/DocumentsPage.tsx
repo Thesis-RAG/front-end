@@ -352,11 +352,11 @@ export default function DocumentsPage() {
 
   const reviewerOptions = useMemo(() => {
     const base = [
-      { label: "Director", value: "director" },
-      { label: "Administrator Auditor", value: "admin_auditor" },
+      { label: "Giám đốc", value: "director" },
+      { label: "Quản trị viên", value: "admin_auditor" },
     ];
     if (user?.role === "employee")
-      base.push({ label: "Department Manager", value: "department_manager" });
+      base.push({ label: "Quản lý phòng ban", value: "department_manager" });
     return base;
   }, [user?.role]);
 
@@ -407,8 +407,8 @@ export default function DocumentsPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="Documents"
-        description="Enterprise knowledge document management"
+        title="Tài liệu"
+        description="Quản lý tài liệu của công ty, bao gồm tải lên, phân loại và theo dõi phiên bản."
         actions={
           canEdit && (
             <Button
@@ -418,7 +418,7 @@ export default function DocumentsPage() {
                 setUploadDialogOpen(true);
               }}
             >
-              <Upload className="h-4 w-4" /> Upload Document
+              <Upload className="h-4 w-4" /> Tải lên tài liệu
             </Button>
           )
         }
@@ -433,10 +433,10 @@ export default function DocumentsPage() {
           <div className="border-b border-border px-6">
             <TabsList className="mt-2">
               <TabsTrigger value="all" className="gap-2 text-[12.5px]">
-                <BookOpen className="h-4 w-4" /> All
+                <BookOpen className="h-4 w-4" /> Tất cả
               </TabsTrigger>
               <TabsTrigger value="mine" className="gap-2 text-[12.5px]">
-                <User className="h-4 w-4" /> Owner
+                <User className="h-4 w-4" /> Sở hữu
               </TabsTrigger>
             </TabsList>
           </div>
@@ -493,16 +493,16 @@ export default function DocumentsPage() {
       >
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>Upload Document</DialogTitle>
+            <DialogTitle>Tải lên tài liệu</DialogTitle>
             <DialogDescription className="text-[12.5px]">
-              Select a file and fill in metadata before uploading.
+              Chọn file và điền thông tin để tải lên tài liệu mới. Bạn có thể phân loại tài liệu theo phòng ban, dự án và mức độ nhạy cảm để quản lý dễ dàng hơn.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2">
             <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <Label>Department</Label>
-                <span className="text-xs text-muted-foreground">Optional</span>
+                <Label>Phòng ban</Label>
+                <span className="text-xs text-muted-foreground">Tùy chọn</span>
               </div>
               <Select
                 value={uploadDeptId || undefined}
@@ -511,10 +511,10 @@ export default function DocumentsPage() {
                 }
               >
                 <SelectTrigger className="data-[placeholder]:text-[12.5px]">
-                  <SelectValue placeholder="Select department (optional)" />
+                  <SelectValue placeholder="Chọn phòng ban" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">None (Company-wide)</SelectItem>
+                  <SelectItem value="__none__">Không (Toàn công ty)</SelectItem>
                   {departments.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.name}
@@ -527,9 +527,9 @@ export default function DocumentsPage() {
             {uploadDeptId && (
               <div className="grid gap-2">
                 <div className="flex items-center justify-between">
-                  <Label>Project</Label>
+                  <Label>Dự án</Label>
                   <span className="text-xs text-muted-foreground">
-                    Optional
+                    Tùy chọn
                   </span>
                 </div>
                 <Select
@@ -541,10 +541,10 @@ export default function DocumentsPage() {
                     <SelectValue
                       placeholder={
                         loadingProjects
-                          ? "Loading projects..."
+                          ? "Đang tải..."
                           : uploadProjects.length === 0
-                            ? "No projects in this department"
-                            : "Select project (optional)"
+                            ? "Không có dự án nào trong phòng ban này"
+                            : "Chọn dự án"
                       }
                     />
                   </SelectTrigger>
@@ -560,25 +560,25 @@ export default function DocumentsPage() {
             )}
 
             <div className="grid gap-2">
-              <Label>Sensitivity Level</Label>
+              <Label>Mức độ nhạy cảm</Label>
               <Select
                 value={uploadSensitivity}
                 onValueChange={setUploadSensitivity}
               >
                 <SelectTrigger className="data-[placeholder]:text-[12.5px]">
-                  <SelectValue placeholder="Select sensitivity level" />
+                  <SelectValue placeholder="Chọn mức độ" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="public">Public</SelectItem>
-                  <SelectItem value="internal">Internal</SelectItem>
+                  <SelectItem value="public">Công khai</SelectItem>
+                  <SelectItem value="internal">Nội bộ</SelectItem>
                   {hasLevelConfidential && (
-                    <SelectItem value="confidential">Confidential</SelectItem>
+                    <SelectItem value="confidential">Hạn chế</SelectItem>
                   )}
                   {hasLevelRestricted && (
-                    <SelectItem value="restricted">Restricted</SelectItem>
+                    <SelectItem value="restricted">Mật</SelectItem>
                   )}
                   {hasLevelTopSecret && (
-                    <SelectItem value="top_secret">Top Secret</SelectItem>
+                    <SelectItem value="top_secret">Tuyệt mật</SelectItem>
                   )}
                 </SelectContent>
               </Select>
@@ -586,13 +586,13 @@ export default function DocumentsPage() {
 
             {!["admin_auditor", "director"].includes(user?.role ?? "") && (
               <div className="grid gap-2">
-                <Label>Reviewer</Label>
+                <Label>Người xét duyệt</Label>
                 <Select
                   value={uploadReviewer}
                   onValueChange={setUploadReviewer}
                 >
                   <SelectTrigger className="data-[placeholder]:text-[12.5px]">
-                    <SelectValue placeholder="Select reviewer" />
+                    <SelectValue placeholder="Chọn người xét duyệt" />
                   </SelectTrigger>
                   <SelectContent>
                     {reviewerOptions.map((r) => (
@@ -613,10 +613,10 @@ export default function DocumentsPage() {
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  Choose file
+                  Chọn file
                 </Button>
                 <span className="text-sm text-muted-foreground truncate max-w-[240px]">
-                  {selectedFile?.name ?? "No file chosen"}
+                  {selectedFile?.name ?? "Không có file nào được chọn"}
                 </span>
                 {selectedFile && (
                   <Button
@@ -645,13 +645,13 @@ export default function DocumentsPage() {
               variant="outline"
               onClick={() => setUploadDialogOpen(false)}
             >
-              Cancel
+              Hủy 
             </Button>
             <Button
               disabled={!canSubmitUpload || uploading}
               onClick={handleUpload}
             >
-              {uploading ? "Uploading..." : "Upload"}
+              {uploading ? "Đang tải lên..." : "Tải lên"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -795,7 +795,7 @@ function TabContent({
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search documents..."
+            placeholder="Tìm kiếm tài liệu..."
             className="pl-9 h-9 placeholder:text-[12.5px]"
           />
         </div>
@@ -810,12 +810,12 @@ function TabContent({
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="approved">Approved</SelectItem>
-              <SelectItem value="review">In Review</SelectItem>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="uploaded">Uploaded</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
+              <SelectItem value="all">Tất cả trạng thái</SelectItem>
+              <SelectItem value="approved">Đã duyệt</SelectItem>
+              <SelectItem value="review">Đang xem xét</SelectItem>
+              <SelectItem value="draft">Nháp</SelectItem>
+              <SelectItem value="uploaded">Đã tải lên</SelectItem>
+              <SelectItem value="archived">Đã lưu trữ</SelectItem>
             </SelectContent>
           </Select>
         )}
@@ -827,17 +827,17 @@ function TabContent({
             <SelectValue placeholder="Sensitivity" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Levels</SelectItem>
-            <SelectItem value="public">Public</SelectItem>
-            <SelectItem value="internal">Internal</SelectItem>
+            <SelectItem value="all">Tất cả mức độ</SelectItem>
+            <SelectItem value="public">Công khai</SelectItem>
+            <SelectItem value="internal">Nội bộ</SelectItem>
             {hasLevelConfidential && (
-              <SelectItem value="confidential">Confidential</SelectItem>
+              <SelectItem value="confidential">Hạn chế</SelectItem>
             )}
             {hasLevelRestricted && (
-              <SelectItem value="restricted">Restricted</SelectItem>
+              <SelectItem value="restricted">Mật</SelectItem>
             )}
             {hasLevelTopSecret && (
-              <SelectItem value="top_secret">Top Secret</SelectItem>
+              <SelectItem value="top_secret">Tuyệt mật</SelectItem>
             )}
           </SelectContent>
         </Select>
@@ -865,8 +865,8 @@ function TabContent({
 
       {renderTable(filtered)}
 
-      <div className="text-sm text-muted-foreground">
-        Showing {filtered.length} of {totalCount} documents
+      <div className="text-sm text-muted-foreground ml-2">
+        Đang hiển thị {filtered.length} trong số {totalCount} tài liệu
       </div>
     </div>
   );
@@ -941,17 +941,17 @@ function DocumentTable({
         <TableHeader>
           <TableRow>
             <TableHead className="w-[30%] font-bold text-black">
-              Title
+              Tên tài liệu
             </TableHead>
-            <TableHead className="font-bold text-black">Department</TableHead>
-            <TableHead className="font-bold text-black">Project</TableHead>
-            <TableHead className="font-bold text-black">Sensitivity</TableHead>
-            <TableHead className="font-bold text-black">Status</TableHead>
-            <TableHead className="font-bold text-black">Versions</TableHead>
+            <TableHead className="font-bold text-black">Phòng ban</TableHead>
+            <TableHead className="font-bold text-black">Dự án</TableHead>
+            <TableHead className="font-bold text-black">Mức độ</TableHead>
+            <TableHead className="font-bold text-black">Trạng thái</TableHead>
+            <TableHead className="font-bold text-black">Phiên bản</TableHead>
             {showOwner && (
-              <TableHead className="font-bold text-black">Owner</TableHead>
+              <TableHead className="font-bold text-black">Người sở hữu</TableHead>
             )}
-            <TableHead className="font-bold text-black">Updated</TableHead>
+            <TableHead className="font-bold text-black">Cập nhật</TableHead>
             <TableHead className="w-12" />
           </TableRow>
         </TableHeader>
@@ -962,7 +962,7 @@ function DocumentTable({
                 colSpan={8}
                 className="h-32 text-center text-muted-foreground"
               >
-                Loading...
+                Đang tìm kiếm ...
               </TableCell>
             </TableRow>
           ) : docs.length === 0 ? (
@@ -970,7 +970,7 @@ function DocumentTable({
               <TableCell colSpan={8} className="h-32 text-center">
                 <div className="flex flex-col items-center justify-center text-muted-foreground">
                   <FileText className="h-8 w-8 mb-2" />
-                  <p>No documents found</p>
+                  <p>Không tìm thấy tài liệu nào</p>
                 </div>
               </TableCell>
             </TableRow>
@@ -1022,7 +1022,7 @@ function DocumentTable({
                               ) : (
                                 <span className="w-4 shrink-0" />
                               )}
-                              None (Company-wide)
+                              Không (Toàn công ty)
                             </button>
                             {departments.map((d) => (
                               <button
@@ -1090,7 +1090,7 @@ function DocumentTable({
                               ) : (
                                 <span className="w-4 shrink-0" />
                               )}
-                              None
+                              Không
                             </button>
                             {editProjects.map((p) => (
                               <button
@@ -1137,13 +1137,13 @@ function DocumentTable({
                         />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="public">Public</SelectItem>
-                        <SelectItem value="internal">Internal</SelectItem>
+                        <SelectItem value="public">Công khai</SelectItem>
+                        <SelectItem value="internal">Nội bộ</SelectItem>
                         <SelectItem value="confidential">
-                          Confidential
+                          Hạn chế
                         </SelectItem>
-                        <SelectItem value="restricted">Restricted</SelectItem>
-                        <SelectItem value="top_secret">Top Secret</SelectItem>
+                        <SelectItem value="restricted">Mật</SelectItem>
+                        <SelectItem value="top_secret">Tuyệt mật</SelectItem>
                       </SelectContent>
                     </Select>
                   ) : (
@@ -1193,14 +1193,14 @@ function DocumentTable({
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
                       <DropdownMenuItem onClick={() => onView(doc)}>
-                        <Eye className="mr-2 h-4 w-4" /> View
+                        <Eye className="mr-2 h-4 w-4" /> Xem
                       </DropdownMenuItem>
 
                       {canEdit && (
                         <>
                           {canMoveDoc && (
                             <DropdownMenuItem>
-                              <Pencil className="mr-2 h-4 w-4" /> Edit Metadata
+                              <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa metadata
                             </DropdownMenuItem>
                           )}
 
@@ -1209,14 +1209,13 @@ function DocumentTable({
                             <DropdownMenuItem
                               onClick={() => onUploadVersion(doc)}
                             >
-                              <Upload className="mr-2 h-4 w-4" /> Upload New
-                              Version
+                              <Upload className="mr-2 h-4 w-4" /> Tải lên phiên bản mới
                             </DropdownMenuItem>
                           )}
 
                           <DropdownMenuSeparator />
                           <DropdownMenuItem>
-                            <Archive className="mr-2 h-4 w-4" /> Archive
+                            <Archive className="mr-2 h-4 w-4" /> Lưu trữ
                           </DropdownMenuItem>
 
                           {canDelete && (
@@ -1226,7 +1225,7 @@ function DocumentTable({
                                 className="text-destructive focus:text-destructive"
                                 onClick={() => onDelete(doc)}
                               >
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                <Trash2 className="mr-2 h-4 w-4" /> Xóa
                               </DropdownMenuItem>
                             </>
                           )}

@@ -67,6 +67,7 @@ export interface ChatMessage {
   traceId?: string;
   status?: "success" | "no_answer" | "no_permission" | "error" | "loading";
   isStreaming?: boolean;
+  attachedFileName?: string;
 }
 
 // Citation

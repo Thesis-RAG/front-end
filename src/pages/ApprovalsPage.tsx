@@ -84,10 +84,10 @@ export default function ApprovalsPage() {
     try {
       if (actionType === "approve") {
         await approveDocument(selected.id, token);
-        toast({ variant: "success", title: "Document approved" });
+        toast({ variant: "success", title: "Đã xét duyệt tài liệu" });
       } else {
         await rejectDocument(selected.id, comment, token);
-        toast({ variant: "success", title: "Document rejected" });
+        toast({ variant: "success", title: "Đã từ chối tài liệu" });
       }
       setSelected(null);
       setActionType(null);
@@ -102,8 +102,8 @@ export default function ApprovalsPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="Approvals"
-        description="Document and new version approval"
+        title="Phê duyệt"
+        description="Xét duyệt tài liệu và phiên bản mới"
       />
       <div className="flex-1 overflow-auto p-6">
         {/* Stats */}
@@ -111,7 +111,7 @@ export default function ApprovalsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Pending Review
+                Đang chờ xét duyệt
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -126,7 +126,7 @@ export default function ApprovalsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Uploaded (Pending Ingest)
+                Đã tải lên (Đang chờ xử lý)
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -141,7 +141,7 @@ export default function ApprovalsPage() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Pending
+                Tổng số chờ xử lý
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -156,7 +156,7 @@ export default function ApprovalsPage() {
         <Tabs defaultValue="review" className="space-y-4">
           <TabsList>
             <TabsTrigger value="review" className="gap-2 text-[12.5px]">
-              In Review
+              Đang chờ xét duyệt
               {pendingReview.length > 0 && (
                 <Badge
                   variant="secondary"
@@ -167,7 +167,7 @@ export default function ApprovalsPage() {
               )}
             </TabsTrigger>
             <TabsTrigger value="uploaded" className="gap-2 text-[12.5px]">
-              Uploaded
+              Đã tải lên
               {pendingUploaded.length > 0 && (
                 <Badge
                   variant="secondary"
@@ -185,8 +185,8 @@ export default function ApprovalsPage() {
             ) : pendingReview.length === 0 ? (
               <EmptyState
                 icon={CheckCircle}
-                title="No pending reviews"
-                description="All documents have been reviewed"
+                title="Không có tài liệu nào đang chờ xử lý"
+                description="Tất cả các tài liệu đã được xem xét."
               />
             ) : (
               pendingReview.map((doc) => (
@@ -206,8 +206,8 @@ export default function ApprovalsPage() {
             ) : pendingUploaded.length === 0 ? (
               <EmptyState
                 icon={FileText}
-                title="No uploaded documents"
-                description="No documents waiting for approval"
+                title="Không có tài liệu nào đang chờ xử lý"
+                description="Không có tài liệu nào đang chờ xét duyệt"
               />
             ) : (
               pendingUploaded.map((doc) => (
@@ -228,21 +228,21 @@ export default function ApprovalsPage() {
           <DialogHeader>
             <DialogTitle className="text-[20px]">
               {actionType === "approve"
-                ? "Approve Document"
-                : "Reject Document"}
+                ? "Xét duyệt tài liệu"
+                : "Từ chối tài liệu"}
             </DialogTitle>
             <DialogDescription className="text-[12px]">
               {actionType === "approve"
-                ? "This will approve the document and make it available in the knowledge base."
-                : "Please provide a reason for rejection."}
+                ? "Bạn có chắc muốn xét duyệt tài liệu này không? Bạn có thể thêm ghi chú."
+                : "Vui lòng cung cấp lý do từ chối."}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
             <div className="flex">
-              <p className="mb-1 text-[13px] font-medium mr-2">Document:</p>
+              <p className="mb-1 text-[13px] font-medium mr-2">Tài liệu:</p>
               <Badge
                 variant="secondary"
-                className="text-[12px] text-muted-foreground"
+                className="text-[12px] text-muted-foreground items-center flex gap-1"
               >
                 <div className="mr-1">{selected?.title}</div>
                 <code className="ml-1text-sm text-muted-foreground">
@@ -254,14 +254,14 @@ export default function ApprovalsPage() {
             <div className="mt-4">
               <label className="text-[13px] font-medium">
                 {actionType === "reject"
-                  ? "Reason (required)"
-                  : "Comment (optional)"}
+                  ? "Lý do (yêu cầu)"
+                  : "Ghi chú (tùy chọn)"}
               </label>
               <Textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder={
-                  actionType === "reject" ? "Explain why..." : "Add notes..."
+                  actionType === "reject" ? "Giải thích lý do..." : "Thêm ghi chú..."
                 }
                 className="mt-2 text-[12px]"
               />
@@ -269,7 +269,7 @@ export default function ApprovalsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelected(null)}>
-              Cancel
+              Hủy
             </Button>
             <Button
               variant={actionType === "approve" ? "default" : "destructive"}
@@ -281,8 +281,8 @@ export default function ApprovalsPage() {
               {submitting
                 ? "Processing..."
                 : actionType === "approve"
-                  ? "Approve"
-                  : "Reject"}
+                  ? "Xét duyệt"
+                  : "Từ chối"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -310,22 +310,27 @@ function ApprovalCard({
               <SensitivityLevelBadge level={doc.sensitivity_level as any} />
             </div>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="text-[12px]">
-                Versions:{" "}
+              <span className="text-[12px] font-semibold">
+                Phiên bản:{" "}
                 <code className="rounded bg-muted px-1">
-                  {doc.version_count}
+                  v{doc.version_count}
                 </code>
               </span>
               <span>·</span>
-              <span className="text-[12px]">
-                Updated: {formatDate(doc.updated_at)}
+              <span className="text-[12px] font-semibold">
+                Cập nhật cuối: 
               </span>
+              <span className="text-[11.5px]">{formatDate(doc.updated_at)}</span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground font-mono">
               ID: {doc.id.slice(0, 30)}...
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" onClick={onApprove} className="text-xs">
+              <CheckCircle className="mr-1.5 h-4 w-4" />
+              Xét duyệt
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -333,13 +338,8 @@ function ApprovalCard({
               className="text-xs hover:bg-gray-100 hover:text-black"
             >
               <XCircle className="mr-1.5 h-4 w-4" />
-              Reject
-            </Button>
-
-            <Button size="sm" onClick={onApprove} className="text-xs">
-              <CheckCircle className="mr-1.5 h-4 w-4" />
-              Approve
-            </Button>
+                Reject
+              </Button>
           </div>
         </div>
       </CardContent>

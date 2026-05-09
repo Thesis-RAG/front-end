@@ -60,18 +60,18 @@ export default function AuditPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="Audit & Jobs"
-        description="Query and processing monitoring"
+        title="Kiểm toán"
+        description="Xem lại lịch sử truy vấn và trạng thái công việc nền của hệ thống."
       />
       <div className="flex-1 overflow-auto">
         <Tabs defaultValue="queries" className="h-full flex flex-col">
           <div className="border-b border-border px-6">
             <TabsList className="mt-2">
               <TabsTrigger className="text-[12px]" value="queries">
-                Query Logs
+                Logs Truy vấn
               </TabsTrigger>
               <TabsTrigger className="text-[12px]" value="jobs">
-                Job Monitor
+                Giám sát Công việc
               </TabsTrigger>
             </TabsList>
           </div>
@@ -143,6 +143,12 @@ function QueryLogsTab() {
       className:
         "bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
     },
+    blocked: {
+      icon: <AlertTriangle className="h-4 w-4 text-red-600" />,
+      label: "Blocked",
+      className:
+        "bg-red-100 text-red-700 border border-red-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
+    },
   };
 
   const getLatency = (timings: any): string => {
@@ -168,7 +174,7 @@ function QueryLogsTab() {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search queries, trace IDs..."
+            placeholder="Tìm kiếm truy vấn, ID trace..."
             className="pl-10 placeholder:text-[12.5px]"
           />
         </div>
@@ -178,21 +184,24 @@ function QueryLogsTab() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem className="text-[12.5px]" value="all">
-              All statuses
+              Tất cả trạng thái
             </SelectItem>
             <SelectItem className="text-[12.5px]" value="completed">
-              Completed
+              Hoàn thành
             </SelectItem>
             <SelectItem className="text-[12.5px]" value="no-answer">
-              No Answer
+              Không trả lời
             </SelectItem>
             <SelectItem className="text-[12.5px]" value="no-permission">
-              No Permission
+              Không có quyền
+            </SelectItem>
+            <SelectItem className="text-[12.5px]" value="blocked">
+              Bị chặn
             </SelectItem>
           </SelectContent>
         </Select>
         <Button variant="outline" className="gap-2 text-[12.5px]">
-          <Download className="h-4 w-4" /> Export
+          <Download className="h-4 w-4" /> Xuất
         </Button>
       </div>
 
@@ -200,15 +209,17 @@ function QueryLogsTab() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="font-bold text-black">Timestamp</TableHead>
-              <TableHead className="font-bold text-black">User ID</TableHead>
+              <TableHead className="font-bold text-black">Thời gian</TableHead>
+              <TableHead className="font-bold text-black">
+                ID Nhân viên
+              </TableHead>
               <TableHead className="font-bold text-black w-[35%]">
                 Query
               </TableHead>
-              <TableHead className="font-bold text-black">Status</TableHead>
-              <TableHead className="font-bold text-black">Docs</TableHead>
-              <TableHead className="font-bold text-black">Citations</TableHead>
-              <TableHead className="font-bold text-black">Latency</TableHead>
+              <TableHead className="font-bold text-black">Trạng thái</TableHead>
+              <TableHead className="font-bold text-black">Tài liệu</TableHead>
+              <TableHead className="font-bold text-black">Nguồn</TableHead>
+              <TableHead className="font-bold text-black">Độ trễ</TableHead>
               <TableHead className="font-bold text-black">Trace ID</TableHead>
             </TableRow>
           </TableHeader>
@@ -228,7 +239,7 @@ function QueryLogsTab() {
                   colSpan={8}
                   className="h-32 text-center text-muted-foreground"
                 >
-                  No records found
+                  Không tìm thấy truy vấn nào
                 </TableCell>
               </TableRow>
             ) : (
@@ -356,26 +367,33 @@ function JobsTab() {
       icon: <Clock className="h-3 w-3" />,
       className:
         "bg-muted text-muted-foreground border border-border hover:bg-muted",
-      label: "Queued",
+      label: "Hàng đợi",
     },
     running: {
       icon: <Loader2 className="h-3 w-3 animate-spin" />,
       className:
         "bg-primary/15 text-primary border border-primary/30 hover:bg-primary/15",
-      label: "Running",
+      label: "Đang chạy",
     },
     succeeded: {
       icon: <CheckCircle className="h-3 w-3" />,
       className:
         "bg-green-100 text-green-700 border border-green-200 hover:bg-green-100",
-      label: "Succeeded",
+      label: "Thành công",
     },
     failed: {
       icon: <XCircle className="h-3 w-3" />,
       className:
         "bg-red-100 text-red-700 border border-red-200 hover:bg-red-100",
-      label: "Failed",
+      label: "Thất bại",
     },
+  };
+
+  const statusLabels: Record<string, string> = {
+    queued: "Hàng đợi",
+    running: "Đang chạy",
+    succeeded: "Thành công",
+    failed: "Thất bại",
   };
 
   const statColors: Record<string, { text: string; count: string }> = {
@@ -411,12 +429,16 @@ function JobsTab() {
       <div className="grid grid-cols-4 gap-4">
         {statuses.map((s) => {
           const c = statColors[s];
+
           return (
             <div
               key={s}
               className="rounded-lg border border-border bg-card p-4"
             >
-              <p className={cn("text-sm capitalize font-medium", c.text)}>{s}</p>
+              <p className={cn("text-sm font-medium", c.text)}>
+                {statusLabels[s] || s}
+              </p>
+
               <p className={cn("mt-1 text-2xl font-semibold", c.count)}>
                 {jobs.filter((j) => j.status === s).length}
               </p>
@@ -431,16 +453,16 @@ function JobsTab() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-black font-bold">Job ID</TableHead>
-              <TableHead className="text-black font-bold">Type</TableHead>
+              <TableHead className="text-black font-bold">Loại</TableHead>
               <TableHead className="text-black font-bold w-[40%]">
-                Document
+                Tài liệu
               </TableHead>
-              <TableHead className="text-black font-bold">Status</TableHead>
-              <TableHead className="text-black font-bold">Retries</TableHead>
-              <TableHead className="text-black font-bold">Started</TableHead>
-              <TableHead className="text-black font-bold">Ended</TableHead>
+              <TableHead className="text-black font-bold">Trạng thái</TableHead>
+              <TableHead className="text-black font-bold">Lần thử</TableHead>
+              <TableHead className="text-black font-bold">Bắt đầu</TableHead>
+              <TableHead className="text-black font-bold">Kết thúc</TableHead>
               <TableHead className="text-black font-bold w-[8%]">
-                Actions
+                Hành động
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -451,7 +473,7 @@ function JobsTab() {
                   colSpan={8}
                   className="h-32 text-center text-muted-foreground"
                 >
-                  Loading...
+                  Đang tải...
                 </TableCell>
               </TableRow>
             ) : jobs.length === 0 ? (
@@ -460,7 +482,7 @@ function JobsTab() {
                   colSpan={8}
                   className="h-32 text-center text-muted-foreground"
                 >
-                  No jobs found
+                  Không tìm thấy công việc nào
                 </TableCell>
               </TableRow>
             ) : (
@@ -528,7 +550,7 @@ function JobsTab() {
                           size="sm"
                           onClick={() => handleCancel(job.id)}
                         >
-                          Cancel
+                          Hủy
                         </Button>
                       )}
                       {job.status === "failed" && (
@@ -539,7 +561,7 @@ function JobsTab() {
                               size="sm"
                               onClick={() => handleRetry(job.id)}
                             >
-                              Retry
+                              Thử lại
                             </Button>
                           </TooltipTrigger>
                           {job.error_message && (

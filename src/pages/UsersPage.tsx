@@ -79,6 +79,21 @@ import {
   ClearanceRecord,
 } from "@/services/users.api";
 
+const roleLabels: Record<string, string> = {
+  admin_auditor: "Quản trị viên",
+  director: "Giám đốc",
+  department_manager: "Quản lý phòng ban",
+  employee: "Nhân viên",
+};
+
+const clearanceLabels: Record<string, string> = {
+  public: "Công khai",
+  internal: "Nội bộ",
+  confidential: "Hạn chế",
+  restricted: "Mật",
+  top_secret: "Tuyệt mật",
+};
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 export default function UsersPage() {
   const [activeTab, setActiveTab] = useState("users");
@@ -89,8 +104,8 @@ export default function UsersPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="Users & Access"
-        description="Manage users, roles, and permissions across the system. Control access levels, ensure security, and maintain proper authorization for every account in the platform."
+        title="Người dùng & Truy cập"
+        description="Quản lý người dùng, dự án và phòng ban"
         actions={
           activeTab === "users" ? (
             <AddUserButton onCreated={() => setUserRefresh((n) => n + 1)} />
@@ -115,13 +130,13 @@ export default function UsersPage() {
           <div className="border-b border-border px-6">
             <TabsList className="mt-2">
               <TabsTrigger value="users" className="gap-2 text-[12.5px]">
-                <Users className="h-4 w-4" /> Users
+                <Users className="h-4 w-4" /> Người dùng
               </TabsTrigger>
               <TabsTrigger value="projects" className="gap-2 text-[12.5px]">
-                <FolderKanban className="h-4 w-4" /> Projects
+                <FolderKanban className="h-4 w-4" /> Dự án
               </TabsTrigger>
               <TabsTrigger value="departments" className="gap-2 text-[12.5px]">
-                <Building2 className="h-4 w-4" /> Departments
+                <Building2 className="h-4 w-4" /> Phòng ban
               </TabsTrigger>
             </TabsList>
           </div>
@@ -273,7 +288,7 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search users..."
+            placeholder="Tìm kiếm người dùng..."
             className="pl-9 h-9 placeholder:text-[12.5px]"
           />
         </div>
@@ -284,15 +299,21 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
         {/* Role filter */}
         <Select value={filterRole} onValueChange={setFilterRole}>
           <SelectTrigger
-            className={`h-9 w-auto gap-1.5 px-3 text-[12.5px] ${filterRole !== "__all__" ? "border-primary text-primary bg-primary/5" : ""}`}
+            className={`h-9 w-auto gap-1.5 px-3 text-[12.5px] ${
+              filterRole !== "__all__"
+                ? "border-primary bg-primary/5 text-primary"
+                : ""
+            }`}
           >
-            <SelectValue placeholder="Role" />
+            <SelectValue placeholder="Vai trò" />
           </SelectTrigger>
+
           <SelectContent>
-            <SelectItem value="__all__">All Roles</SelectItem>
+            <SelectItem value="__all__">Tất cả vai trò</SelectItem>
+
             {roles.map((r) => (
               <SelectItem key={r.id} value={r.name}>
-                {r.name}
+                {roleLabels[r.name] || r.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -306,7 +327,7 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
             <SelectValue placeholder="Department" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Departments</SelectItem>
+            <SelectItem value="__all__">Tất cả phòng ban</SelectItem>
             {departments.map((d) => (
               <SelectItem key={d.id} value={d.name}>
                 {d.name}
@@ -323,10 +344,11 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
             <SelectValue placeholder="Clearance" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Clearances</SelectItem>
+            <SelectItem value="__all__">Tất cả cấp độ</SelectItem>
+
             {clearances.map((c) => (
               <SelectItem key={c.id} value={c.name}>
-                {c.name}
+                {clearanceLabels[c.name] || c.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -340,9 +362,9 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Status</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="__all__">Tất cả trạng thái</SelectItem>
+            <SelectItem value="active">Hoạt động</SelectItem>
+            <SelectItem value="inactive">Không hoạt động</SelectItem>
           </SelectContent>
         </Select>
 
@@ -383,19 +405,19 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <TableHeader>
             <TableRow className="">
               <TableHead className="w-[40%] font-bold text-black">
-                User
+                Người dùng
               </TableHead>
               <TableHead className="w-[12%] font-bold text-black">
-                Role
+                Vai trò
               </TableHead>
               <TableHead className="w-[12%] font-bold text-black">
-                Department
+                Phòng ban
               </TableHead>
               <TableHead className="w-[10%] font-bold text-black">
-                Clearance
+                Cấp độ
               </TableHead>
-              <TableHead className="w-[5%] font-bold text-black">
-                Status
+              <TableHead className="w-[7%] font-bold text-black">
+                Trạng thái
               </TableHead>
               <TableHead className="w-[4%]" />
             </TableRow>
@@ -407,7 +429,7 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
                   colSpan={6}
                   className="text-center text-muted-foreground"
                 >
-                  Loading...
+                  Đang tải...
                 </TableCell>
               </TableRow>
             ) : (
@@ -438,15 +460,16 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
                       <SelectTrigger className="h-auto w-auto border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden">
                         <Badge
                           variant="secondary"
-                          className="cursor-pointer hover:bg-gray-300 font-normal"
+                          className="cursor-pointer font-normal hover:bg-gray-300"
                         >
-                          <SelectValue />
+                          {roleLabels[user.role] || user.role}
                         </Badge>
                       </SelectTrigger>
+
                       <SelectContent>
                         {roles.map((r) => (
                           <SelectItem key={r.id} value={r.name}>
-                            {r.name}
+                            {roleLabels[r.name] || r.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -486,15 +509,19 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
                       <SelectTrigger className="h-auto w-auto border-0 bg-transparent p-0 shadow-none focus:ring-0 [&>svg]:hidden">
                         <Badge
                           variant="secondary"
-                          className={`cursor-pointer font-normal ${clearanceClass(user.clearance_level)}`}
+                          className={`cursor-pointer font-normal ${clearanceClass(
+                            user.clearance_level,
+                          )}`}
                         >
-                          <SelectValue />
+                          {clearanceLabels[user.clearance_level] ||
+                            user.clearance_level}
                         </Badge>
                       </SelectTrigger>
+
                       <SelectContent>
                         {clearances.map((c) => (
                           <SelectItem key={c.id} value={c.name}>
-                            {c.name}
+                            {clearanceLabels[c.name] || c.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -508,7 +535,9 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
                       <span
                         className={`text-[13px] ${user.status !== "active" ? "text-muted-foreground" : ""}`}
                       >
-                        {user.status === "active" ? "Active" : "Inactive"}
+                        {user.status === "active"
+                          ? "Hiệu lực"
+                          : "Không hiệu lực"}
                       </span>
                     </div>
                   </TableCell>
@@ -521,7 +550,7 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => setDetailUser(user)}>
-                          View Details
+                          Xem chi tiết
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         {user.status === "active" ? (
@@ -531,7 +560,7 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
                               handleUpdateField(user.id, "status", "inactive")
                             }
                           >
-                            <UserX className="mr-2 h-4 w-4" /> Deactivate
+                            <UserX className="mr-2 h-4 w-4" /> Ngừng hoạt động
                           </DropdownMenuItem>
                         ) : (
                           <DropdownMenuItem
@@ -556,12 +585,12 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
       <Dialog open={!!detailUser} onOpenChange={() => setDetailUser(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>User Details</DialogTitle>
+            <DialogTitle>Chi tiết người dùng</DialogTitle>
           </DialogHeader>
           {detailUser && (
             <div className="space-y-3 py-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Name</span>
+                <span className="text-muted-foreground">Tên</span>
                 <span className="font-medium">{detailUser.name}</span>
               </div>
               <div className="flex justify-between">
@@ -569,27 +598,37 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
                 <span>{detailUser.email}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Role</span>
-                <Badge variant="secondary">{detailUser.role}</Badge>
+                <span className="text-muted-foreground">Vai trò</span>
+
+                <Badge variant="secondary">
+                  {roleLabels[detailUser.role] || detailUser.role}
+                </Badge>
+              </div>
+
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Cấp độ</span>
+
+                <Badge variant="secondary">
+                  {clearanceLabels[detailUser.clearance_level] ||
+                    detailUser.clearance_level}
+                </Badge>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Clearance</span>
-                <Badge variant="secondary">{detailUser.clearance_level}</Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Departments</span>
+                <span className="text-muted-foreground">Phòng ban</span>
                 <span className="text-right text-sm">
-                  {detailUser.department_name ?? "—"}
+                  {detailUser.department_name ?? "-"}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Status</span>
+                <span className="text-muted-foreground">Trạng thái</span>
                 <div className="flex items-center gap-1.5">
                   <div
                     className={`h-2 w-2 rounded-full ${detailUser.status === "active" ? "bg-green-500" : "bg-muted-foreground"}`}
                   />
-                  <span>
-                    {detailUser.status === "active" ? "Active" : "Inactive"}
+                  <span className="text-[13px]">
+                    {detailUser.status === "active"
+                      ? "Hiệu lực"
+                      : "Không hiệu lực"}
                   </span>
                 </div>
               </div>
@@ -597,7 +636,7 @@ function UsersTab({ refreshTrigger }: { refreshTrigger?: number }) {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDetailUser(null)}>
-              Close
+              Đóng
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -775,7 +814,7 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <Input
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
-            placeholder="Search projects..."
+            placeholder="Tìm kiếm dự án..."
             className="pl-9 h-9 placeholder:text-[12.5px]"
           />
         </div>
@@ -786,7 +825,7 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <Input
             value={searchUser}
             onChange={(e) => setSearchUser(e.target.value)}
-            placeholder="Filter by user..."
+            placeholder="Lọc theo nhân viên..."
             className="pl-9 h-9 placeholder:text-[12.5px]"
           />
         </div>
@@ -802,7 +841,7 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
             <SelectValue placeholder="Department" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__all__">All Departments</SelectItem>
+            <SelectItem value="__all__">Tất cả phòng ban</SelectItem>
             {departments.map((d) => (
               <SelectItem key={d.id} value={d.id}>
                 {d.name}
@@ -832,13 +871,13 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <TableHeader>
             <TableRow>
               <TableHead className="w-[70%] font-bold text-black">
-                Project
+                Dự án
               </TableHead>
               <TableHead className="w-[15%] font-bold text-black">
-                Department
+                Phòng ban
               </TableHead>
               <TableHead className="w-[15%] font-bold text-black">
-                Users
+                Nhân viên
               </TableHead>
               <TableHead className="w-[5%]" />
             </TableRow>
@@ -859,7 +898,7 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                   colSpan={4}
                   className="text-center text-muted-foreground"
                 >
-                  No projects found
+                  Không tìm thấy dự án 
                 </TableCell>
               </TableRow>
             ) : (
@@ -885,7 +924,7 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                           <div className="p-2 border-b">
                             <Input
                               autoFocus
-                              placeholder="Search department..."
+                              placeholder="Tìm kiếm..."
                               value={deptSearch}
                               onChange={(e) => setDeptSearch(e.target.value)}
                               className="h-7 text-sm placeholder:text-[12.5px]"
@@ -923,14 +962,14 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                         className="cursor-pointer hover:bg-gray-300 font-normal"
                         onClick={() => handleOpenUsers(proj)}
                       >
-                        {proj.user_count} users
+                        {proj.user_count} nhân viên
                       </Badge>
                       {openUsersId === proj.id && (
                         <div className="absolute z-50 top-full left-0 mt-1 w-64 rounded-md border bg-popover shadow-md">
                           <div className="p-2 border-b">
                             <Input
                               autoFocus
-                              placeholder="Search users..."
+                              placeholder="Tìm kiếm..."
                               value={userSearch}
                               onChange={(e) => setUserSearch(e.target.value)}
                               className="h-7 text-sm placeholder:text-[12px]"
@@ -939,7 +978,7 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                           <div className="max-h-48 overflow-y-auto py-1">
                             {filteredUsers.length === 0 ? (
                               <p className="px-3 py-2 text-sm text-muted-foreground">
-                                No users found
+                                Không tìm thấy người dùng
                               </p>
                             ) : (
                               filteredUsers.map((u) => (
@@ -969,7 +1008,7 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                               disabled={savingUsers}
                               onClick={() => handleSaveUsers(proj.id)}
                             >
-                              {savingUsers ? "Saving..." : "Save"}
+                              {savingUsers ? "Đang lưu..." : "Lưu"}
                             </Button>
                           </div>
                         </div>
@@ -985,10 +1024,10 @@ function ProjectsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
+                        <DropdownMenuItem>Xem chi tiết</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive">
-                          Delete
+                            Xóa
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1038,7 +1077,7 @@ function DepartmentsTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <Input
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
-            placeholder="Search departments..."
+            placeholder="Tìm kiếm phòng ban..."
             className="pl-9 h-9 placeholder:text-[12.5px]"
           />
         </div>
@@ -1047,7 +1086,7 @@ function DepartmentsTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <Input
             value={searchProject}
             onChange={(e) => setSearchProject(e.target.value)}
-            placeholder="Filter by project..."
+            placeholder="Lọc theo dự án..."
             className="pl-9 h-9 placeholder:text-[12.5px]"
           />
         </div>
@@ -1056,7 +1095,7 @@ function DepartmentsTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <Input
             value={searchUser}
             onChange={(e) => setSearchUser(e.target.value)}
-            placeholder="Filter by user..."
+            placeholder="Lọc theo nhân viên..."
             className="pl-9 h-9 placeholder:text-[12.5px]"
           />
         </div>
@@ -1080,13 +1119,13 @@ function DepartmentsTab({ refreshTrigger }: { refreshTrigger?: number }) {
           <TableHeader>
             <TableRow>
               <TableHead className="w-[70%] font-bold text-black">
-                Department
+                Phòng ban
               </TableHead>
               <TableHead className="w-[15%] font-bold text-black">
-                Projects
+                Dự án
               </TableHead>
               <TableHead className="w-[15%] font-bold text-black">
-                Users
+                  Nhân viên
               </TableHead>
               <TableHead className="w-[5%]" />
             </TableRow>
@@ -1098,7 +1137,7 @@ function DepartmentsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                   colSpan={4}
                   className="text-center text-muted-foreground"
                 >
-                  Loading...
+                  Đang tải...
                 </TableCell>
               </TableRow>
             ) : (
@@ -1107,12 +1146,12 @@ function DepartmentsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                   <TableCell className="font-medium">{dept.name}</TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="font-normal">
-                      {dept.project_count} projects
+                      {dept.project_count} dự án
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary" className="font-normal">
-                      {dept.user_count} users
+                      {dept.user_count} nhân viên
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right pr-10">
@@ -1123,10 +1162,10 @@ function DepartmentsTab({ refreshTrigger }: { refreshTrigger?: number }) {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
+                        <DropdownMenuItem>Xem chi tiết</DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive">
-                          Delete
+                          Xóa
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -1173,28 +1212,28 @@ function AddDepartmentButton({ onCreated }: { onCreated?: () => void }) {
           setOpen(true);
         }}
       >
-        <Plus className="h-4 w-4" /> Add Department
+        <Plus className="h-4 w-4" /> Thêm phòng ban
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Add Department</DialogTitle>
-          </DialogHeader>
+              <DialogTitle>Thêm phòng ban</DialogTitle>
+            </DialogHeader>
           <div className="grid gap-2 py-2">
-            <Label>Department Name</Label>
+            <Label>Tên phòng ban</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Engineering"
+              placeholder="Phòng Nhân Sự"
               onKeyDown={(e) => e.key === "Enter" && handle()}
             />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              Hủy
             </Button>
             <Button disabled={!name.trim() || saving} onClick={handle}>
-              {saving ? "Creating..." : "Create"}
+              {saving ? "Đang tạo..." : "Tạo"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1246,27 +1285,27 @@ function AddProjectButton({ onCreated }: { onCreated?: () => void }) {
           setOpen(true);
         }}
       >
-        <Plus className="h-4 w-4" /> Add Project
+        <Plus className="h-4 w-4" /> Thêm dự án
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Add Project</DialogTitle>
+            <DialogTitle>Thêm dự án</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid gap-2">
-              <Label>Project Name</Label>
+              <Label>Tên dự án</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Project Alpha"
+                placeholder="Dự án Alpha Gold"
               />
             </div>
             <div className="grid gap-2">
-              <Label>Department</Label>
+              <Label>Phòng ban</Label>
               <Select value={deptId} onValueChange={setDeptId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select department" />
+                  <SelectValue placeholder="Chọn phòng ban" />
                 </SelectTrigger>
                 <SelectContent>
                   {departments.map((d) => (
@@ -1280,13 +1319,13 @@ function AddProjectButton({ onCreated }: { onCreated?: () => void }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              Hủy
             </Button>
             <Button
               disabled={!name.trim() || !deptId || saving}
               onClick={handle}
             >
-              {saving ? "Creating..." : "Create"}
+              {saving ? "Đang tạo..." : "Tạo"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1346,22 +1385,22 @@ function AddUserButton({ onCreated }: { onCreated?: () => void }) {
   return (
     <>
       <Button className="gap-2" onClick={() => setOpen(true)}>
-        <Plus className="h-4 w-4" /> Add User
+        <Plus className="h-4 w-4" /> Thêm người dùng
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
-            <DialogTitle>Add User</DialogTitle>
+            <DialogTitle>Thêm người dùng</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label>Full Name</Label>
+                <Label>Họ Tên</Label>
                 <Input
                   value={form.name}
                   onChange={(e) => set("name", e.target.value)}
-                  placeholder="Nguyen Van A"
+                  placeholder="Nguyễn Văn A"
                   className="placeholder:text-[12.5px]"
                 />
               </div>
@@ -1370,14 +1409,14 @@ function AddUserButton({ onCreated }: { onCreated?: () => void }) {
                 <Input
                   value={form.email}
                   onChange={(e) => set("email", e.target.value)}
-                  placeholder="a@company.com"
+                  placeholder="nva@rag.com"
                   className="placeholder:text-[12.5px]"
                 />
               </div>
             </div>
 
             <div className="grid gap-1.5">
-              <Label>Password</Label>
+              <Label>Mật khẩu</Label>
               <Input
                 type="password"
                 value={form.password}
@@ -1387,49 +1426,56 @@ function AddUserButton({ onCreated }: { onCreated?: () => void }) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-1.5">
-                <Label>Role</Label>
+                <Label>Vai trò</Label>
                 <Select value={form.role} onValueChange={(v) => set("role", v)}>
                   <SelectTrigger className="data-[placeholder]:text-[12.5px]">
-                    <SelectValue placeholder="Select role" />
+                    <SelectValue placeholder="Chọn vai trò" />
                   </SelectTrigger>
+
                   <SelectContent>
-                    <SelectItem value="employee">Employee</SelectItem>
+                    <SelectItem value="admin_auditor">Quản trị viên</SelectItem>
+
+                    <SelectItem value="director">Giám đốc</SelectItem>
                     <SelectItem value="department_manager">
-                      Department Manager
+                      Quản lý phòng ban
                     </SelectItem>
-                    <SelectItem value="director">Director</SelectItem>
-                    <SelectItem value="admin_auditor">Admin Auditor</SelectItem>
+
+                    <SelectItem value="employee">Nhân viên</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid gap-1.5">
-                <Label>Clearance Level</Label>
+                <Label>Cấp độ</Label>
                 <Select
                   value={form.clearance_level}
                   onValueChange={(v) => set("clearance_level", v)}
                 >
                   <SelectTrigger className="data-[placeholder]:text-[12.5px]">
-                    <SelectValue placeholder="Select level" />
+                    <SelectValue placeholder="Chọn cấp độ" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="public">Public</SelectItem>
-                    <SelectItem value="internal">Internal</SelectItem>
-                    <SelectItem value="confidential">Confidential</SelectItem>
-                    <SelectItem value="restricted">Restricted</SelectItem>
-                    <SelectItem value="top_secret">Top Secret</SelectItem>
+                    <SelectItem value="public">Công khai</SelectItem>
+
+                    <SelectItem value="internal">Nội bộ</SelectItem>
+
+                    <SelectItem value="confidential">Hạn chế</SelectItem>
+
+                    <SelectItem value="restricted">Mật</SelectItem>
+
+                    <SelectItem value="top_secret">Tuyệt mật</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="grid gap-1.5">
-              <Label>Department</Label>
+              <Label>Phòng ban</Label>
               <Select
                 value={form.department_id}
                 onValueChange={(v) => set("department_id", v)}
               >
                 <SelectTrigger className="data-[placeholder]:text-[12.5px]">
-                  <SelectValue placeholder="Select department" />
+                  <SelectValue placeholder="Chọn phòng ban" />
                 </SelectTrigger>
                 <SelectContent>
                   {departments.map((d) => (

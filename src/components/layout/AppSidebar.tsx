@@ -33,38 +33,38 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   {
-    label: "Chat Assistant",
+    label: "Trợ lý trò chuyện",
     icon: MessageSquare,
     path: "/chat",
     permission: "chat",
   },
-  { label: "Search", icon: Search, path: "/search", permission: "search" },
+  { label: "Tìm kiếm", icon: Search, path: "/search", permission: "search" },
   {
-    label: "Documents",
+    label: "Tài liệu",
     icon: FileText,
     path: "/documents",
     permission: "documents.view",
   },
   {
-    label: "Approvals",
+    label: "Phê duyệt",
     icon: CheckSquare,
     path: "/approvals",
     permission: "approvals",
   },
   {
-    label: "Users & Access",
+    label: "Người dùng & Truy cập",
     icon: Users,
     path: "/users",
     permission: "users.manage",
   },
   {
-    label: "Audit Logs",
+    label: "Kiểm toán",
     icon: Activity,
     path: "/audit",
     permission: "audit.view",
   },
   {
-    label: "Settings",
+    label: "Cài đặt",
     icon: Settings,
     path: "/settings",
     permission: "settings",
@@ -72,10 +72,10 @@ const navItems: NavItem[] = [
 ];
 
 const roleLabels: Record<UserRole, string> = {
-  employee: "Employee",
-  department_manager: "Dept. Manager",
-  director: "Director",
-  admin_auditor: "Administrator Auditor",
+  employee: "Nhân viên",
+  department_manager: "Quản lý phòng ban",
+  director: "Giám đốc",
+  admin_auditor: "Quản trị viên",
 };
 
 export function AppSidebar() {
@@ -106,7 +106,7 @@ export function AppSidebar() {
           <span className="text-sm font-semibold text-sidebar-accent-foreground">
             KnowledgeHub
           </span>
-          <span className="text-xs text-sidebar-muted">Enterprise RAG</span>
+          <span className="text-xs text-sidebar-muted">Hệ thống RAG doanh nghiệp</span>
         </div>
       </div>
 
@@ -185,7 +185,7 @@ export function AppSidebar() {
                 className="text-destructive focus:text-destructive"
               >
                 <LogOut className="mr-2 h-4 w-4" />
-                Sign out
+                Đăng xuất
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

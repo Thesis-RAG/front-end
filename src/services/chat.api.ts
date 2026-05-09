@@ -147,13 +147,11 @@ export async function postMessageStream(
   content: string,
   token: string,
   onToken: (text: string) => void,
-  onDone: (data: {
-    content: string;
-    sources: any[];
-    messageId: string;
-  }) => void,
+  onDone: (data: { content: string; sources: any[]; messageId: string }) => void,
   filters?: { project_ids?: string[]; department_ids?: string[] },
   mode: "rag" | "chatbot" = "rag",
+  fileContent?: string,  
+  fileName?: string,      
 ) {
   const res = await fetch(
     `${ENV.API_BASE_URL}/conversations/${conversationId}/messages/stream`,
@@ -168,6 +166,8 @@ export async function postMessageStream(
         project_ids: filters?.project_ids ?? null,
         department_ids: filters?.department_ids ?? null,
         mode,
+        file_content: fileContent ?? null,   
+        file_name: fileName ?? null,  
       }),
     },
   );
