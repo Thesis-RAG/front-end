@@ -4,11 +4,10 @@ import {
   ThumbsDown,
   Copy,
   Check,
-  AlertTriangle,
-  ShieldX,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
+  BookOpen,
+  Paperclip,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatMessage as ChatMessageType, Citation } from "@/types";
@@ -22,13 +21,15 @@ import {
 
 interface ChatMessageProps {
   message: ChatMessageType;
-  onCitationClick: (citation: Citation) => void;
+  userQuery?: string;
+  /** Called when user clicks the Sources button — passes all citations */
+  onSourcesClick: (citations: Citation[]) => void;
   onFeedback: (messageId: string, helpful: boolean) => void;
 }
 
 export function ChatMessage({
   message,
-  onCitationClick,
+  onSourcesClick,
   onFeedback,
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
@@ -37,6 +38,11 @@ export function ChatMessage({
 
   const isUser = message.role === "user";
   const isNoAnswer = message.status === "no_answer";
+  const hasSources =
+    !isUser &&
+    message.citations &&
+    message.citations.length > 0 &&
+    !message.isStreaming;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
@@ -80,6 +86,14 @@ export function ChatMessage({
                 : "bg-background text-gray-900",
           )}
         >
+          {isUser && message.attachedFileName && (
+            <div className="flex items-center gap-1.5 mb-2">
+              <span className="flex items-center gap-1 text-xs bg-primary/10 text-primary rounded-full px-2.5 py-1 border border-primary/20">
+                <Paperclip className="h-3 w-3" />
+                {message.attachedFileName}
+              </span>
+            </div>
+          )}
           {message.isStreaming && !message.content ? (
             <div className="mt-3 flex translate-y-1 items-center gap-2">
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
@@ -96,40 +110,31 @@ export function ChatMessage({
           )}
         </div>
 
-        {message.citations && message.citations.length > 0 && (
-          <div className="mt-4">
-            <p
-              className={cn(
-                "mb-2 text-xs font-medium text-muted-foreground",
-                isUser && "text-right",
-              )}
-            >
-              Sources ({message.citations.length})
-            </p>
-            <div
-              className={cn("flex flex-wrap gap-2", isUser && "justify-end")}
-            >
-              {message.citations.map((citation, index) => (
-                <button
-                  key={citation.id}
-                  onClick={() => onCitationClick(citation)}
-                  className="flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs transition-colors hover:bg-accent"
-                >
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-[10px] font-medium text-primary">
-                    {index + 1}
-                  </span>
-                  <span className="max-w-[180px] truncate">
-                    {citation.documentTitle}
-                  </span>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
+        {/* ── Bottom action row ── */}
         {!isUser && !message.isStreaming && (
-          <div className="mt-4 flex items-center gap-2">
+          <div className="mt-3 flex items-center gap-1 flex-wrap">
+            {/* Sources button — single, Vertex AI style */}
+            {hasSources && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="group h-7 gap-1.5 px-2.5 text-xs rounded-full border-border hover:bg-accent"
+                onClick={() => onSourcesClick(message.citations!)}
+              >
+                <BookOpen className="h-3 w-3" />
+                Sources
+                <span
+                  // 2. Thêm group-hover để đổi màu nền và màu chữ của con số khi hover vào Button
+                  className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold transition-colors group-hover:bg-background group-hover:text-foreground"
+                >
+                  {message.citations!.length}
+                </span>
+              </Button>
+            )}
+
+            <div className="mx-1 h-4 w-px bg-border" />
+
+            {/* Copy */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -148,8 +153,7 @@ export function ChatMessage({
               <TooltipContent>Copy</TooltipContent>
             </Tooltip>
 
-            <div className="h-4 w-px bg-border" />
-
+            {/* Thumbs up */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -168,6 +172,7 @@ export function ChatMessage({
               <TooltipContent>Helpful</TooltipContent>
             </Tooltip>
 
+            {/* Thumbs down */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -186,6 +191,7 @@ export function ChatMessage({
               <TooltipContent>Not helpful</TooltipContent>
             </Tooltip>
 
+            {/* Details / Trace */}
             {message.traceId && (
               <>
                 <div className="h-4 w-px bg-border" />
@@ -207,13 +213,9 @@ export function ChatMessage({
           </div>
         )}
 
+        {/* Trace ID panel */}
         {showTrace && message.traceId && (
-          <div
-            className={cn(
-              "mt-3 rounded-md border border-border bg-muted/50 p-3 text-xs animate-fade-in",
-              isUser && "text-right",
-            )}
-          >
+          <div className="mt-3 rounded-md border border-border bg-muted/50 p-3 text-xs animate-fade-in">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Trace ID:</span>
               <div className="flex items-center gap-2">

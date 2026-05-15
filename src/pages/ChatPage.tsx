@@ -2,15 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
-import { CitationsPanel } from "@/components/chat/CitationsPanel";
+import { SourcesPanel } from "@/components/chat/SourcesPanel";
 import { ScrollArea } from "@/components/ui/scroll-area";
-// import { mockMessages } from "@/data/mockData";
 import {
   Conversation,
   ChatMessage as ChatMessageType,
   Citation,
 } from "@/types";
-import { MessageSquare, Filter, X, BookOpen, Bot } from "lucide-react";
+import { BookOpen, Bot } from "lucide-react";
 import {
   createConversation,
   postMessageStream,
@@ -33,10 +32,13 @@ export default function ChatPage() {
   const [selectedDeptIds, setSelectedDeptIds] = useState<string[]>([]);
   const [deptFilterOn, setDeptFilterOn] = useState(false);
   const [chatMode, setChatMode] = useState<"rag" | "chatbot">("rag");
+  const [pendingAttach, setPendingAttach] = useState<{
+    text: string;
+    name: string;
+  } | null>(null);
 
   const handleGetConversation = async (userId: string) => {
     const result = await getListConversation(userId, token);
-
     return result.map((item: any) => ({
       id: item.id,
       title: item.title,
@@ -48,10 +50,8 @@ export default function ChatPage() {
 
   const handleGetConversationMessage = async (conversationId?: string) => {
     if (!conversationId) return;
-    // fetch messages for a conversation
     const result = await getListConversationMessage(conversationId, token);
 
-    // Map API response to ChatMessageType[]
     const mapped: ChatMessageType[] = result
       .flatMap((item: any) => {
         const userMsg: ChatMessageType = {
@@ -83,7 +83,6 @@ export default function ChatPage() {
 
         return [userMsg, assistantMsg];
       })
-      // sort chronologically (oldest first)
       .sort(
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
@@ -97,15 +96,12 @@ export default function ChatPage() {
     const load = async () => {
       const list = await handleGetConversation(user.id);
       setConversations(list);
-      // set first conversation as active and load its messages
       if (list.length) {
         setActiveConversationId(list[0].id);
         await handleGetConversationMessage(list[0].id);
       }
     };
-
     load();
-    // only run on mount / when user or token changes
   }, [user.id, token]);
 
   useEffect(() => {
@@ -124,10 +120,11 @@ export default function ChatPage() {
     string | undefined
   >(undefined);
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
-  // messages are loaded when activeConversationId is set (see useEffect above)
-  const [selectedCitation, setSelectedCitation] = useState<Citation | null>(
-    null,
-  );
+
+  // ── Sources panel state (replaces CitationsPanel) ──────────────────────────
+  const [openSources, setOpenSources] = useState<Citation[] | null>(null);
+  const [openSourcesQuery, setOpenSourcesQuery] = useState<string>("");
+
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -141,12 +138,9 @@ export default function ChatPage() {
 
   const handleNewConversation = async () => {
     const result = await createConversation(
-      {
-        title: "New conversation",
-      },
+      { title: "Cuộc trò chuyện" },
       token,
     );
-
     const newConv: Conversation = {
       id: result.id,
       title: result.title,
@@ -154,7 +148,6 @@ export default function ChatPage() {
       updatedAt: result.updated_at,
       messageCount: 0,
     };
-
     setConversations([newConv, ...conversations]);
     setActiveConversationId(newConv.id);
     setMessages([]);
@@ -162,19 +155,12 @@ export default function ChatPage() {
 
   const handleSelectConversation = (id: string) => {
     setActiveConversationId(id);
-    // load messages for selected conversation
     handleGetConversationMessage(id);
-    setSelectedCitation(null);
+    setOpenSources(null);
   };
 
   const handleRenameConversation = async (id: string, title: string) => {
-    const result = await updateConversation(
-      activeConversationId,
-      {
-        title: title,
-      },
-      token,
-    );
+    await updateConversation(activeConversationId, { title }, token);
     setConversations(
       conversations.map((c) => (c.id === id ? { ...c, title } : c)),
     );
@@ -182,37 +168,33 @@ export default function ChatPage() {
 
   const handleDeleteConversation = async (id: string) => {
     await deleteConversation(id, token);
-
-    const remainingConversations = conversations.filter((c) => c.id !== id);
-    setConversations(remainingConversations);
-
+    const remaining = conversations.filter((c) => c.id !== id);
+    setConversations(remaining);
     const isDeletingActive = activeConversationId === id;
-
     if (isDeletingActive) {
-      const nextActiveId = remainingConversations[0]?.id;
-      setActiveConversationId(nextActiveId);
-      setSelectedCitation(null);
-
-      if (nextActiveId) {
-        await handleGetConversationMessage(nextActiveId);
+      const nextId = remaining[0]?.id;
+      setActiveConversationId(nextId);
+      setOpenSources(null);
+      if (nextId) {
+        await handleGetConversationMessage(nextId);
       } else {
         setMessages([]);
       }
     }
   };
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (
+    content: string,
+    fileContent?: string,
+    fileName?: string,
+  ) => {
     let conversationId = activeConversationId;
 
-    // N?u ch?a c? conversation n?o th? t?o m?i tr??c
     if (!conversationId) {
       const result = await createConversation(
-        {
-          title: "New conversation",
-        },
+        { title: "Cuộc trò chuyện" },
         token,
       );
-
       const newConv: Conversation = {
         id: result.id,
         title: result.title,
@@ -220,7 +202,6 @@ export default function ChatPage() {
         updatedAt: result.updated_at,
         messageCount: 0,
       };
-
       setConversations((prev) => [newConv, ...prev]);
       setActiveConversationId(newConv.id);
       conversationId = newConv.id;
@@ -236,6 +217,7 @@ export default function ChatPage() {
         role: "user",
         content,
         timestamp: new Date().toISOString(),
+        attachedFileName: fileName,
       },
       {
         id: tempAssistantId,
@@ -253,7 +235,6 @@ export default function ChatPage() {
         conversationId!,
         content,
         token,
-        // onToken — cập nhật từng token
         (text) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -263,7 +244,6 @@ export default function ChatPage() {
             ),
           );
         },
-        // onDone — finalize
         (data) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -286,8 +266,10 @@ export default function ChatPage() {
           department_ids: getEffectiveDeptIds(),
         },
         chatMode,
+        fileContent, // thêm
+        fileName,
       );
-    } catch (error) {
+    } catch {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempAssistantId
@@ -306,13 +288,8 @@ export default function ChatPage() {
     );
   };
 
-  const handleCitationClick = (citation: Citation) => {
-    setSelectedCitation(citation);
-  };
-
   const handleFeedback = (messageId: string, helpful: boolean) => {
     console.log("Feedback:", { messageId, helpful });
-    //TODO: In real app, send to backend
   };
 
   const getEffectiveDeptIds = () => {
@@ -320,7 +297,6 @@ export default function ChatPage() {
     if (["admin_auditor", "director"].includes(user?.role ?? "")) {
       return selectedDeptIds.length > 0 ? selectedDeptIds : undefined;
     }
-    // employee/dept_manager → dùng dept của mình
     return user?.department ? [user.department] : undefined;
   };
 
@@ -337,9 +313,8 @@ export default function ChatPage() {
       />
 
       {/* Main chat area */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col min-w-0">
         {messages.length === 0 ? (
-          /* Empty state */
           <div className="flex flex-1 flex-col items-center justify-center p-8">
             <div
               className={cn(
@@ -354,30 +329,46 @@ export default function ChatPage() {
               )}
             </div>
             <h2 className="mt-4 text-xl font-semibold">
-              {chatMode === "rag" ? "RAG SMEs Assistant" : "Chatbot Assistant"}
+              {chatMode === "rag" ? "Trợ lý RAG SMEs" : "Trợ lý AI"}
             </h2>
             <p className="mt-2 max-w-md text-center text-muted-foreground">
               {chatMode === "rag"
-                ? "Ask questions about processes, policies, and enterprise knowledge. Answers are based on approved documents with source citations."
-                : "General-purpose AI assistant. Ask me anything — not limited to company documents."}
+                ? "Hãy đặt câu hỏi về các quy trình, chính sách và kiến ​​thức doanh nghiệp. Câu trả lời dựa trên các tài liệu đã được phê duyệt kèm theo trích dẫn nguồn."
+                : "Trợ lý AI đa năng. Hỏi tôi bất cứ điều gì - Không chỉ giới hạn trong tài liệu công ty."}
             </p>
           </div>
         ) : (
-          /* Messages */
           <ScrollArea className="flex-1">
             <div className="mx-auto max-w-3xl">
-              {messages.map((message) => (
-                <ChatMessage
-                  key={message.id}
-                  message={message}
-                  onCitationClick={handleCitationClick}
-                  onFeedback={handleFeedback}
-                />
-              ))}
+              {messages.map((message, idx) => {
+                // Lấy query = content của user message liền trước assistant message
+                const userQuery =
+                  message.role === "assistant" &&
+                  idx > 0 &&
+                  messages[idx - 1].role === "user"
+                    ? messages[idx - 1].content
+                    : "";
+
+                return (
+                  <ChatMessage
+                    key={message.id}
+                    message={message}
+                    userQuery={userQuery}
+                    onSourcesClick={(citations) => {
+                      setOpenSources((prev) =>
+                        prev === citations ? null : citations,
+                      );
+                      setOpenSourcesQuery(userQuery); // <-- lưu query
+                    }}
+                    onFeedback={handleFeedback}
+                  />
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
           </ScrollArea>
         )}
+
         <ChatInput
           onSend={handleSendMessage}
           onStop={handleStopStreaming}
@@ -390,6 +381,7 @@ export default function ChatPage() {
           userRole={user?.role ?? ""}
           activeFilterCount={selectedProjectIds.length + (deptFilterOn ? 1 : 0)}
           chatMode={chatMode}
+          externalAttach={pendingAttach}
           onToggleProject={(id) =>
             setSelectedProjectIds((prev) =>
               prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
@@ -407,15 +399,23 @@ export default function ChatPage() {
           onToggleMode={() =>
             setChatMode((m) => (m === "rag" ? "chatbot" : "rag"))
           }
+          onExternalAttachConsumed={() => setPendingAttach(null)} 
         />
       </div>
 
-      {/* Citations panel */}
-      {selectedCitation && (
-        <CitationsPanel
-          citation={selectedCitation}
-          onClose={() => setSelectedCitation(null)}
+      {/* ── Sources panel (Vertex AI style) ── */}
+      {openSources && (
+        <SourcesPanel
+          citations={openSources}
+          onClose={() => {
+            setOpenSources(null);
+            setOpenSourcesQuery("");
+          }}
           token={token}
+          query={openSourcesQuery}
+          onAttachFile={(text, name) => {
+            setPendingAttach({ text, name });
+          }}
         />
       )}
     </div>

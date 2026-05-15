@@ -74,14 +74,28 @@ export default function SearchPage() {
     SensitivityLevel | "all"
   >("all");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
+  const containsKeyword = (text: string, query: string) => {
+    if (!query) return true;
+
+    const words = query.toLowerCase().split(/\s+/);
+    const lowerText = text.toLowerCase();
+
+    // tất cả từ phải xuất hiện (AND logic)
+    return words.every((w) => lowerText.includes(w));
+  };
   const filteredResults = results.filter((r) => {
     const matchSensitivity =
       sensitivityLevelFilter === "all" ||
       r.metadata.sensitivity_level === sensitivityLevelFilter;
+
     const matchDept =
       departmentFilter === "all" ||
       r.metadata.department_id === departmentFilter;
-    return matchSensitivity && matchDept;
+
+    const matchKeyword =
+      searchMode !== "keyword" || containsKeyword(r.document_text, query);
+
+    return matchSensitivity && matchDept && matchKeyword;
   });
 
   const handleSearch = async () => {
@@ -92,7 +106,7 @@ export default function SearchPage() {
       const data = await searchDocuments(query, searchMode, token);
       setResults(data);
     } catch {
-      toast({ variant: "destructive", title: "Search failed" });
+      toast({ variant: "destructive", title: "Tìm kiếm thất bại" });
     } finally {
       setIsSearching(false);
     }
@@ -125,8 +139,8 @@ export default function SearchPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="Search"
-        description="Keyword-based or semantic knowledge search"
+        title="Tìm kiếm"
+        description="Tìm kiếm kiến thức dựa trên từ khóa hoặc ngữ nghĩa"
       />
 
       <div className="flex-1 overflow-auto p-6">
@@ -139,7 +153,7 @@ export default function SearchPage() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Enter the keyword..."
+                placeholder="Nhập từ khóa..."
                 className="pl-10 pr-4"
               />
             </div>
@@ -152,21 +166,26 @@ export default function SearchPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="hybrid">Hybrid</SelectItem>
-                <SelectItem value="keyword">Keyword</SelectItem>
-                <SelectItem value="semantic">Semantic</SelectItem>
+                <SelectItem value="hybrid">Kết hợp</SelectItem>
+                <SelectItem value="keyword">Từ khóa</SelectItem>
+                <SelectItem value="semantic">Ngữ nghĩa</SelectItem>
               </SelectContent>
             </Select>
 
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" className="gap-2 text-[12px]">
+                <Button variant="outline" className="group gap-2 text-[12px]">
                   <SlidersHorizontal className="h-4 w-4" />
-                  Filters
+                  Bộ lọc
                   {activeFiltersCount > 0 && (
                     <Badge
-                      variant="secondary"
-                      className="ml-1 h-5 w-5 rounded-full p-0 text-xs"
+                      className="
+        ml-1 flex h-5 w-5 items-center justify-center rounded-full
+        bg-primary p-0 text-xs text-primary-foreground
+        transition-colors
+        group-hover:bg-white
+        group-hover:text-primary
+      "
                     >
                       {activeFiltersCount}
                     </Badge>
@@ -176,25 +195,23 @@ export default function SearchPage() {
               <SheetContent>
                 <SheetHeader>
                   <SheetTitle className="text-[16px]">
-                    Search Filters
+                    Bộ lọc tìm kiếm
                   </SheetTitle>
                 </SheetHeader>
                 <div className="mt-6 space-y-6">
                   {canEdit && (
                     <div>
-                      <label className="text-sm font-medium">Department</label>
+                      <label className="text-sm font-medium">Phòng ban</label>
 
                       <Select
-                        value={statusFilter}
-                        onValueChange={(v) =>
-                          setStatusFilter(v as DocumentStatus | "all")
-                        }
+                        value={departmentFilter}
+                        onValueChange={(v) => setDepartmentFilter(v)}
                       >
                         <SelectTrigger className="mt-2 text-[12.5px]">
-                          <SelectValue placeholder="All statuses" />
+                          <SelectValue placeholder="Tất cả" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="all">All Departments</SelectItem>
+                          <SelectItem value="all">Tất cả</SelectItem>
                           {departments.map((d) => (
                             <SelectItem key={d.id} value={d.id}>
                               {d.name}
@@ -207,7 +224,7 @@ export default function SearchPage() {
 
                   <div>
                     <label className="text-sm font-medium">
-                      Sensitivity Level
+                      Mức độ nhạy cảm
                     </label>
                     <Select
                       value={sensitivityLevelFilter}
@@ -219,30 +236,24 @@ export default function SearchPage() {
                         <SelectValue placeholder="All Sensitivity Levels" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">
-                          All Sensitivity Levels
-                        </SelectItem>
-                        <SelectItem value="public">Public</SelectItem>
-                        <SelectItem value="internal">Internal</SelectItem>
+                        <SelectItem value="all">Tất cả</SelectItem>
+                        <SelectItem value="public">Công khai</SelectItem>
+                        <SelectItem value="internal">Nội bộ</SelectItem>
                         {hasLevelConfidential && (
-                          <SelectItem value="confidential">
-                            Confidential
-                          </SelectItem>
+                          <SelectItem value="confidential">Hạn chế</SelectItem>
                         )}
                         {hasLevelRestricted && (
-                          <SelectItem value="restricted">
-                            Restriected
-                          </SelectItem>
+                          <SelectItem value="restricted">Mật</SelectItem>
                         )}
                         {hasLevelTopSecret && (
-                          <SelectItem value="top_secret">Top secret</SelectItem>
+                          <SelectItem value="top_secret">Tuyệt mật</SelectItem>
                         )}
                       </SelectContent>
                     </Select>
                   </div>
 
                   <div>
-                    <label className="text-sm font-medium">Status</label>
+                    <label className="text-sm font-medium">Trạng thái</label>
                     <Select
                       value={statusFilter}
                       onValueChange={(v) =>
@@ -253,12 +264,12 @@ export default function SearchPage() {
                         <SelectValue placeholder="All statuses" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">All Statuses</SelectItem>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="uploaded">Uploaded</SelectItem>
-                        <SelectItem value="review">Review</SelectItem>
-                        <SelectItem value="approved">Approved</SelectItem>
-                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="all">Tất cả</SelectItem>
+                        <SelectItem value="draft">Bản nháp</SelectItem>
+                        <SelectItem value="uploaded">Đã tải lên</SelectItem>
+                        <SelectItem value="review">Đang xem xét</SelectItem>
+                        <SelectItem value="approved">Đã phê duyệt</SelectItem>
+                        <SelectItem value="rejected">Bị từ chối</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -266,10 +277,10 @@ export default function SearchPage() {
                   {activeFiltersCount > 0 && (
                     <Button
                       variant="outline"
-                      className="w-full"
+                      className="w-full bg-destructive/30 text-destructive hover:bg-destructive/20 hover:text-destructive transition-colors mt-4 text-[12px]"
                       onClick={clearFilters}
                     >
-                      Clear all filters
+                      Xóa tất cả bộ lọc
                     </Button>
                   )}
                 </div>
@@ -281,19 +292,19 @@ export default function SearchPage() {
               disabled={!query.trim() || isSearching}
               className="text-[12px]"
             >
-              {isSearching ? "Searching..." : "Search"}
+              {isSearching ? "Đang tìm kiếm..." : "Tìm kiếm"}
             </Button>
           </div>
 
           {/* Search mode indicator */}
           <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Mode:</span>
+            <span className="text-[12px]">Chế độ lọc:</span>
             <Badge variant="outline" className="font-normal">
               {searchMode === "hybrid"
-                ? "Hybrid (Keyword + Semantic)"
+                ? "Kết hợp"
                 : searchMode === "keyword"
-                  ? "Keyword only"
-                  : "Semantic only"}
+                  ? "Chỉ từ khóa"
+                  : "Chỉ ngữ nghĩa"}
             </Badge>
           </div>
 
@@ -316,7 +327,7 @@ export default function SearchPage() {
               results.length > 0 ? (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
-                    Found {filteredResults.length} results for "{query}"
+                    Tìm thấy {filteredResults.length} kết quả cho "{query}"
                   </p>
                   {filteredResults.map((result, idx) => (
                     <SearchResultCard
@@ -329,18 +340,18 @@ export default function SearchPage() {
               ) : (
                 <div className="rounded-lg border border-border bg-muted/30 p-8 text-center">
                   <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-4 font-medium">No found the results</h3>
+                  <h3 className="mt-4 font-medium">Không tìm thấy kết quả</h3>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Let change the keyword or change the filter
+                    Hãy thay đổi từ khóa hoặc thay đổi bộ lọc để có kết quả khác
                   </p>
                 </div>
               )
             ) : (
               <div className="rounded-lg border border-dashed border-border p-12 text-center">
                 <Search className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 font-medium">Start searching</h3>
+                <h3 className="mt-4 font-medium">Bắt đầu tìm kiếm</h3>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Enter keyword and Enter or click Search
+                  Nhập từ khóa và nhấn Enter hoặc click Tìm kiếm
                 </p>
               </div>
             )}
@@ -360,17 +371,70 @@ function SearchResultCard({
 }) {
   const highlightText = (text: string) => {
     if (!query) return text;
-    const regex = new RegExp(`(${query})`, "gi");
-    const parts = text.split(regex);
-    return parts.map((part, i) =>
-      regex.test(part) ? (
+
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+
+    const lowerText = text.toLowerCase();
+
+    let ranges: [number, number][] = [];
+
+    // tìm tất cả vị trí match của từng word
+    words.forEach((word) => {
+      let startIndex = 0;
+
+      while (true) {
+        const index = lowerText.indexOf(word, startIndex);
+        if (index === -1) break;
+
+        ranges.push([index, index + word.length]);
+        startIndex = index + word.length;
+      }
+    });
+
+    if (ranges.length === 0) return text;
+
+    // 🔥 merge các range chồng hoặc liền kề
+    ranges.sort((a, b) => a[0] - b[0]);
+
+    const merged: [number, number][] = [];
+    let current = ranges[0];
+
+    for (let i = 1; i < ranges.length; i++) {
+      const next = ranges[i];
+
+      if (next[0] <= current[1] + 1) {
+        // overlap hoặc liền kề
+        current[1] = Math.max(current[1], next[1]);
+      } else {
+        merged.push(current);
+        current = next;
+      }
+    }
+    merged.push(current);
+
+    // build JSX
+    const result = [];
+    let lastIndex = 0;
+
+    merged.forEach(([start, end], i) => {
+      if (start > lastIndex) {
+        result.push(text.slice(lastIndex, start));
+      }
+
+      result.push(
         <mark key={i} className="bg-yellow-100 text-foreground rounded px-0.5">
-          {part}
-        </mark>
-      ) : (
-        part
-      ),
-    );
+          {text.slice(start, end)}
+        </mark>,
+      );
+
+      lastIndex = end;
+    });
+
+    if (lastIndex < text.length) {
+      result.push(text.slice(lastIndex));
+    }
+
+    return result;
   };
 
   return (
@@ -385,27 +449,27 @@ function SearchResultCard({
               level={result.metadata.sensitivity_level as SensitivityLevel}
             />
             <Badge variant="outline" className="text-xs font-normal">
-              p.{result.metadata.page_start}–{result.metadata.page_end}
+              Trang {result.metadata.page_start}–{result.metadata.page_end}
             </Badge>
           </div>
           <div className="mt-1 flex items-center gap-2">
             <Badge variant="secondary" className="text-[10px] font-semibold">
-              chunk #{result.metadata.chunk_index}
+              Phân đoạn #{result.metadata.chunk_index}
             </Badge>
             {result.sources.map((s) => (
               <Badge
                 key={s}
                 variant="outline"
-                className="text-[10px] font-semibold capitalize"
+                className="text-[10px] font-semibold"
               >
-                {s}
+                {s === "semantic" ? "Ngữ nghĩa" : "Từ khóa"}
               </Badge>
             ))}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="text-right">
-            <div className="text-xs text-muted-foreground">Score</div>
+            <div className="text-xs text-muted-foreground">Điểm</div>
             <div className="font-medium text-sm">
               {Math.round(result.score * 100)}%
             </div>
@@ -423,9 +487,9 @@ function SearchResultCard({
       </p>
 
       <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-        <span>Semantic: {Math.round(result.semantic_score * 100)}%</span>
+        <span>Từ khóa: {Math.round(result.keyword_score * 100)}%</span>
         <span>·</span>
-        <span>Keyword: {Math.round(result.keyword_score * 100)}%</span>
+        <span>Ngữ nghĩa: {Math.round(result.semantic_score * 100)}%</span>
       </div>
     </div>
   );

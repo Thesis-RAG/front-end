@@ -100,7 +100,6 @@ export async function updateDocument(
   return res.json();
 }
 
-
 export function getDocumentFileUrl(
   documentId: string,
   versionId: string,
@@ -109,7 +108,6 @@ export function getDocumentFileUrl(
   // Trả về URL trực tiếp, token đính kèm qua query param
   return `${ENV.API_BASE_URL}/documents/${documentId}/versions/${versionId}/file?token=${token}`;
 }
-
 
 export async function openDocumentFile(
   documentId: string,
@@ -130,30 +128,37 @@ export async function openDocumentFile(
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-
 export async function approveDocument(documentId: string, token: string) {
-  const res = await fetch(`${ENV.API_BASE_URL}/documents/${documentId}/approve`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
-
-export async function rejectDocument(documentId: string, reason: string, token: string) {
-  const res = await fetch(`${ENV.API_BASE_URL}/documents/${documentId}/reject`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+  const res = await fetch(
+    `${ENV.API_BASE_URL}/documents/${documentId}/approve`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
     },
-    body: JSON.stringify({ reason }),
-  });
+  );
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
+export async function rejectDocument(
+  documentId: string,
+  reason: string,
+  token: string,
+) {
+  const res = await fetch(
+    `${ENV.API_BASE_URL}/documents/${documentId}/reject`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ reason }),
+    },
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 
 export async function fetchPendingApprovals(token: string) {
   const res = await fetch(`${ENV.API_BASE_URL}/documents`, {
@@ -162,9 +167,10 @@ export async function fetchPendingApprovals(token: string) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const docs = await res.json();
   // Lọc những doc cần duyệt
-  return docs.filter((d: any) => d.status === "review" || d.status === "uploaded");
+  return docs.filter(
+    (d: any) => d.status === "review" || d.status === "uploaded",
+  );
 }
-
 
 export async function submitForReview(
   documentId: string,
@@ -186,8 +192,6 @@ export async function submitForReview(
   return res.json();
 }
 
-
-
 export async function deleteDocument(documentId: string, token: string) {
   const res = await fetch(`${ENV.API_BASE_URL}/documents/${documentId}`, {
     method: "DELETE",
@@ -198,4 +202,54 @@ export async function deleteDocument(documentId: string, token: string) {
     throw new Error(text || `HTTP ${res.status}`);
   }
   return res.json();
+}
+
+export async function fetchDocumentFileAsText(
+  documentId: string,
+  versionId: string,
+  token: string,
+): Promise<{ text: string; fileName: string }> {
+  const res = await fetch(
+    `${ENV.API_BASE_URL}/documents/${documentId}/versions/${versionId}/file`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+
+  console.log("fetch status:", res.status); // ✅ bước 1
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const contentDisposition = res.headers.get("Content-Disposition") ?? "";
+  const match = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+  const fileName = match ? decodeURIComponent(match[1]) : `${documentId}.pdf`;
+
+  const blob = await res.blob();
+  console.log("blob type:", blob.type, "size:", blob.size); // ✅ bước 2
+
+  if (blob.type === "application/pdf" || fileName.endsWith(".pdf")) {
+    try {
+      // ✅ Import theo cách này thay vì destructuring default
+      const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf");
+
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+      const arrayBuffer = await blob.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      let text = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text +=
+          content.items
+            .map((item: any) => ("str" in item ? item.str : ""))
+            .join(" ") + "\n";
+      }
+      return { text, fileName };
+    } catch (err) {
+      console.error("PDF parse error:", err);
+      throw err;
+    }
+  }
+
+  const text = await blob.text();
+  return { text, fileName: documentId };
 }
