@@ -1,11 +1,18 @@
 import { useState, useEffect } from "react";
-import { CheckCircle, XCircle, Clock, FileText } from "lucide-react";
+import { CheckCircle, XCircle, Clock, FileText, Eye } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { SensitivityLevelBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -21,18 +28,28 @@ import {
   fetchPendingApprovals,
   approveDocument,
   rejectDocument,
+  updateDocument,
+  openDocumentFile,
 } from "@/services/documents.api";
+import {
+  fetchOrgUnits,
+  fetchOrgUnitInstances,
+  OrgUnit,
+  OrgUnitInstance,
+} from "@/services/org_units.api";
+import { SENSITIVITY_LEVEL, SENSITIVITY_COLOR } from "@/types";
 
 interface DocRecord {
   id: string;
   title: string;
   status: string;
-  sensitivity_level: string;
-  department_id: string;
+  sensitivity: number;
+  oui_ids: string[];
   owner_user_id: string;
   version_count: number;
   created_at: string;
   updated_at: string;
+  current_version_id?: string;
 }
 
 const formatDate = (s: string) =>
@@ -46,6 +63,8 @@ const formatDate = (s: string) =>
 
 export default function ApprovalsPage() {
   const { token } = useAuth();
+  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
+  const [ouis, setOuis] = useState<OrgUnitInstance[]>([]);
   const [docs, setDocs] = useState<DocRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<DocRecord | null>(null);
@@ -54,6 +73,9 @@ export default function ApprovalsPage() {
   );
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [approveSensitivity, setApproveSensitivity] = useState<number | null>(
+    null,
+  );
 
   const load = () => {
     setLoading(true);
@@ -69,6 +91,15 @@ export default function ApprovalsPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    fetchOrgUnits(token)
+      .then(setOrgUnits)
+      .catch(() => {});
+    fetchOrgUnitInstances(token)
+      .then(setOuis)
+      .catch(() => {});
+  }, []);
+
   const pendingReview = docs.filter((d) => d.status === "review");
   const pendingUploaded = docs.filter((d) => d.status === "uploaded");
 
@@ -76,6 +107,19 @@ export default function ApprovalsPage() {
     setSelected(doc);
     setActionType(type);
     setComment("");
+    setApproveSensitivity(doc.sensitivity);
+  };
+
+  const handleView = async (doc: DocRecord) => {
+    if (!doc.current_version_id) {
+      toast({ variant: "destructive", title: "Chưa có file" });
+      return;
+    }
+    try {
+      await openDocumentFile(doc.id, doc.current_version_id, token);
+    } catch {
+      toast({ variant: "destructive", title: "Không thể mở tài liệu" });
+    }
   };
 
   const confirmAction = async () => {
@@ -83,6 +127,13 @@ export default function ApprovalsPage() {
     setSubmitting(true);
     try {
       if (actionType === "approve") {
+        if (approveSensitivity && approveSensitivity !== selected.sensitivity) {
+          await updateDocument(
+            selected.id,
+            { sensitivity: approveSensitivity },
+            token,
+          );
+        }
         await approveDocument(selected.id, token);
         toast({ variant: "success", title: "Đã xét duyệt tài liệu" });
       } else {
@@ -193,8 +244,11 @@ export default function ApprovalsPage() {
                 <ApprovalCard
                   key={doc.id}
                   doc={doc}
+                  orgUnits={orgUnits}
+                  ouis={ouis}
                   onApprove={() => handleAction(doc, "approve")}
                   onReject={() => handleAction(doc, "reject")}
+                  onView={() => handleView(doc)}
                 />
               ))
             )}
@@ -214,8 +268,11 @@ export default function ApprovalsPage() {
                 <ApprovalCard
                   key={doc.id}
                   doc={doc}
+                  orgUnits={orgUnits}
+                  ouis={ouis}
                   onApprove={() => handleAction(doc, "approve")}
                   onReject={() => handleAction(doc, "reject")}
+                  onView={() => handleView(doc)}
                 />
               ))
             )}
@@ -251,6 +308,27 @@ export default function ApprovalsPage() {
               </Badge>
             </div>
 
+            {actionType === "approve" && (
+              <div className="mt-3">
+                <label className="text-[13px] font-medium">Độ nhạy cảm</label>
+                <Select
+                  value={String(approveSensitivity)}
+                  onValueChange={(v) => setApproveSensitivity(Number(v))}
+                >
+                  <SelectTrigger className="mt-2 text-[12px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(SENSITIVITY_LEVEL).map(([k, v]) => (
+                      <SelectItem key={k} value={k}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="mt-4">
               <label className="text-[13px] font-medium">
                 {actionType === "reject"
@@ -261,7 +339,9 @@ export default function ApprovalsPage() {
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 placeholder={
-                  actionType === "reject" ? "Giải thích lý do..." : "Thêm ghi chú..."
+                  actionType === "reject"
+                    ? "Giải thích lý do..."
+                    : "Thêm ghi chú..."
                 }
                 className="mt-2 text-[12px]"
               />
@@ -293,13 +373,24 @@ export default function ApprovalsPage() {
 
 function ApprovalCard({
   doc,
+  orgUnits,
+  ouis,
   onApprove,
   onReject,
+  onView,
 }: {
   doc: DocRecord;
+  orgUnits: OrgUnit[];
+  ouis: OrgUnitInstance[];
   onApprove: () => void;
   onReject: () => void;
+  onView: () => void;
 }) {
+  const getOuiLabel = (ouiId: string) => {
+    const oui = ouis.find((o) => o.id === ouiId);
+    const ou = orgUnits.find((u) => u.id === oui?.ou_id);
+    return oui ? `${ou?.name ?? ""} / ${oui.name}` : ouiId.slice(0, 8);
+  };
   return (
     <Card>
       <CardContent className="p-4">
@@ -307,9 +398,30 @@ function ApprovalCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-[15px]">{doc.title}</span>
-              <SensitivityLevelBadge level={doc.sensitivity_level as any} />
+              {/* ← thay SensitivityLevelBadge bằng: */}
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${SENSITIVITY_COLOR[doc.sensitivity] ?? "bg-gray-100 text-gray-700"}`}
+              >
+                {SENSITIVITY_LEVEL[doc.sensitivity] ?? doc.sensitivity}
+              </span>
             </div>
-            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
+            <div className="flex flex-row items-center gap-4 my-2">
+              <div className="text-[12px]">Đơn vị:</div>
+              {doc.oui_ids.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {doc.oui_ids.map((id) => (
+                    <Badge
+                      key={id}
+                      variant="secondary"
+                      className="text-[11px] font-normal"
+                    >
+                      {getOuiLabel(id)}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground mb-2">
               <span className="text-[12px] font-semibold">
                 Phiên bản:{" "}
                 <code className="rounded bg-muted px-1">
@@ -317,16 +429,24 @@ function ApprovalCard({
                 </code>
               </span>
               <span>·</span>
-              <span className="text-[12px] font-semibold">
-                Cập nhật cuối: 
+              <span className="text-[12px] font-semibold">Cập nhật cuối:</span>
+              <span className="text-[11.5px]">
+                {formatDate(doc.updated_at)}
               </span>
-              <span className="text-[11.5px]">{formatDate(doc.updated_at)}</span>
             </div>
             <div className="mt-1 text-xs text-muted-foreground font-mono">
               ID: {doc.id.slice(0, 30)}...
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onView}
+              className="text-xs bg-green-100 text-green-700 hover:bg-green-200 hover:text-green-800"
+            >
+              <Eye className="mr-1.5 h-4 w-4" /> Xem tài liệu
+            </Button>
             <Button size="sm" onClick={onApprove} className="text-xs">
               <CheckCircle className="mr-1.5 h-4 w-4" />
               Xét duyệt
@@ -338,8 +458,8 @@ function ApprovalCard({
               className="text-xs hover:bg-gray-100 hover:text-black"
             >
               <XCircle className="mr-1.5 h-4 w-4" />
-                Reject
-              </Button>
+              Từ chối
+            </Button>
           </div>
         </div>
       </CardContent>

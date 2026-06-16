@@ -18,40 +18,42 @@ import {
   updateConversation,
   deleteConversation,
 } from "@/services/chat.api";
+import { fetchOrgUnitInstances, fetchOrgUnits } from "@/services/org_units.api";
 import { useAuth } from "@/contexts/AuthContext";
-import { fetchProjects, Project } from "@/services/projects.api";
-import { fetchDepartments, Department } from "@/services/departments.api";
 import { cn } from "@/lib/utils";
 
 export default function ChatPage() {
-  const { token, user } = useAuth();
+  const { token, user, isCorpMember } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [availableProjects, setAvailableProjects] = useState<Project[]>([]);
-  const [availableDepts, setAvailableDepts] = useState<Department[]>([]);
-  const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
-  const [selectedDeptIds, setSelectedDeptIds] = useState<string[]>([]);
-  const [deptFilterOn, setDeptFilterOn] = useState(false);
+  const [selectedOuiIds, setSelectedOuiIds] = useState<string[]>([]);
+  const [chatSource, setChatSource] = useState<"rag" | "gmail" | "all">("rag");
+  const [availableOuis, setAvailableOuis] = useState<
+    { id: string; name: string; ou_name: string }[]
+  >([]);
+
   const [chatMode, setChatMode] = useState<"rag" | "chatbot">("rag");
   const [pendingAttach, setPendingAttach] = useState<{
     text: string;
     name: string;
   } | null>(null);
+  const [activeConversationId, setActiveConversationId] = useState<
+    string | undefined
+  >(undefined);
+  const [messages, setMessages] = useState<ChatMessageType[]>([]);
+  const [openSources, setOpenSources] = useState<Citation[] | null>(null);
+  const [openSourcesQuery, setOpenSourcesQuery] = useState<string>("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleGetConversation = async (userId: string) => {
-    const result = await getListConversation(userId, token);
-    return result.map((item: any) => ({
-      id: item.id,
-      title: item.title,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at,
-      messageCount: 0,
-    }));
+  const handleToggleOui = (id: string) => {
+    setSelectedOuiIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   };
 
   const handleGetConversationMessage = async (conversationId?: string) => {
     if (!conversationId) return;
     const result = await getListConversationMessage(conversationId, token);
-
     const mapped: ChatMessageType[] = result
       .flatMap((item: any) => {
         const userMsg: ChatMessageType = {
@@ -60,7 +62,6 @@ export default function ChatPage() {
           content: item.content,
           timestamp: item.createdAt,
         };
-
         const assistant = item.assistantMessage;
         const assistantMsg: ChatMessageType = {
           id: assistant?.id ?? `${item.messageId}-assistant`,
@@ -80,60 +81,76 @@ export default function ChatPage() {
           traceId: item.traceId,
           status: assistant?.status ?? "success",
         };
-
         return [userMsg, assistantMsg];
       })
       .sort(
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
-
     setMessages(mapped);
     return mapped;
   };
 
   useEffect(() => {
     const load = async () => {
-      const list = await handleGetConversation(user.id);
+      const result = await getListConversation(user.id, token);
+      const list = result.map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at,
+        messageCount: 0,
+      }));
       setConversations(list);
       if (list.length) {
         setActiveConversationId(list[0].id);
         await handleGetConversationMessage(list[0].id);
       }
+      const [ouiList, ouList] = await Promise.all([
+        fetchOrgUnitInstances(token),
+        fetchOrgUnits(token),
+      ]);
+
+      // Tính allowed OUI ids giống DocumentsPage
+      let allowedIds: Set<string>;
+
+      if (isCorpMember) {
+        allowedIds = new Set(ouiList.map((o: any) => o.id));
+      } else {
+        const userOuiIds = new Set(
+          user.oui_positions.map((p: any) => p.oui_id),
+        );
+        allowedIds = new Set(userOuiIds);
+        const queue = [...userOuiIds];
+
+        while (queue.length > 0) {
+          const currentId = queue.shift()!;
+          ouiList
+            .filter((o: any) => o.parent_oui_ids.includes(currentId))
+            .forEach((child: any) => {
+              if (!allowedIds.has(child.id)) {
+                allowedIds.add(child.id);
+                queue.push(child.id);
+              }
+            });
+        }
+      }
+
+      setAvailableOuis(
+        ouiList
+          .filter((o: any) => allowedIds.has(o.id))
+          .map((o: any) => ({
+            id: o.id,
+            name: o.name,
+            ou_name: ouList.find((ou: any) => ou.id === o.ou_id)?.name ?? "",
+          })),
+      );
     };
     load();
   }, [user.id, token]);
 
   useEffect(() => {
-    if (!user) return;
-    fetchProjects(token)
-      .then(setAvailableProjects)
-      .catch(() => {});
-    if (["admin_auditor", "director"].includes(user.role)) {
-      fetchDepartments(token)
-        .then(setAvailableDepts)
-        .catch(() => {});
-    }
-  }, [user, token]);
-
-  const [activeConversationId, setActiveConversationId] = useState<
-    string | undefined
-  >(undefined);
-  const [messages, setMessages] = useState<ChatMessageType[]>([]);
-
-  // ── Sources panel state (replaces CitationsPanel) ──────────────────────────
-  const [openSources, setOpenSources] = useState<Citation[] | null>(null);
-  const [openSourcesQuery, setOpenSourcesQuery] = useState<string>("");
-
-  const [isStreaming, setIsStreaming] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
   }, [messages]);
 
   const handleNewConversation = async () => {
@@ -170,16 +187,12 @@ export default function ChatPage() {
     await deleteConversation(id, token);
     const remaining = conversations.filter((c) => c.id !== id);
     setConversations(remaining);
-    const isDeletingActive = activeConversationId === id;
-    if (isDeletingActive) {
+    if (activeConversationId === id) {
       const nextId = remaining[0]?.id;
       setActiveConversationId(nextId);
       setOpenSources(null);
-      if (nextId) {
-        await handleGetConversationMessage(nextId);
-      } else {
-        setMessages([]);
-      }
+      if (nextId) await handleGetConversationMessage(nextId);
+      else setMessages([]);
     }
   };
 
@@ -189,7 +202,6 @@ export default function ChatPage() {
     fileName?: string,
   ) => {
     let conversationId = activeConversationId;
-
     if (!conversationId) {
       const result = await createConversation(
         { title: "Cuộc trò chuyện" },
@@ -209,7 +221,6 @@ export default function ChatPage() {
 
     const tempUserId = `user-${Date.now()}`;
     const tempAssistantId = `assistant-${Date.now()}`;
-
     setMessages((prev) => [
       ...prev,
       {
@@ -235,15 +246,14 @@ export default function ChatPage() {
         conversationId!,
         content,
         token,
-        (text) => {
+        (text) =>
           setMessages((prev) =>
             prev.map((m) =>
               m.id === tempAssistantId
                 ? { ...m, content: m.content + text }
                 : m,
             ),
-          );
-        },
+          ),
         (data) => {
           setMessages((prev) =>
             prev.map((m) =>
@@ -260,14 +270,11 @@ export default function ChatPage() {
           );
           setIsStreaming(false);
         },
-        {
-          project_ids:
-            selectedProjectIds.length > 0 ? selectedProjectIds : undefined,
-          department_ids: getEffectiveDeptIds(),
-        },
+        { oui_ids: selectedOuiIds.length > 0 ? selectedOuiIds : undefined },
         chatMode,
-        fileContent, // thêm
+        fileContent,
         fileName,
+        chatSource,
       );
     } catch {
       setMessages((prev) =>
@@ -288,21 +295,9 @@ export default function ChatPage() {
     );
   };
 
-  const handleFeedback = (messageId: string, helpful: boolean) => {
-    console.log("Feedback:", { messageId, helpful });
-  };
-
-  const getEffectiveDeptIds = () => {
-    if (!deptFilterOn) return undefined;
-    if (["admin_auditor", "director"].includes(user?.role ?? "")) {
-      return selectedDeptIds.length > 0 ? selectedDeptIds : undefined;
-    }
-    return user?.department ? [user.department] : undefined;
-  };
-
   return (
-    <div className="flex h-full">
-      {/* Conversations sidebar */}
+    <div className="flex h-full overflow-hidden">
+
       <ChatSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -311,8 +306,6 @@ export default function ChatPage() {
         onRenameConversation={handleRenameConversation}
         onDeleteConversation={handleDeleteConversation}
       />
-
-      {/* Main chat area */}
       <div className="flex flex-1 flex-col min-w-0">
         {messages.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center p-8">
@@ -333,22 +326,20 @@ export default function ChatPage() {
             </h2>
             <p className="mt-2 max-w-md text-center text-muted-foreground">
               {chatMode === "rag"
-                ? "Hãy đặt câu hỏi về các quy trình, chính sách và kiến ​​thức doanh nghiệp. Câu trả lời dựa trên các tài liệu đã được phê duyệt kèm theo trích dẫn nguồn."
-                : "Trợ lý AI đa năng. Hỏi tôi bất cứ điều gì - Không chỉ giới hạn trong tài liệu công ty."}
+                ? "Hãy đặt câu hỏi về các quy trình, chính sách và kiến thức doanh nghiệp."
+                : "Trợ lý AI đa năng. Hỏi tôi bất cứ điều gì."}
             </p>
           </div>
         ) : (
           <ScrollArea className="flex-1">
             <div className="mx-auto max-w-3xl">
               {messages.map((message, idx) => {
-                // Lấy query = content của user message liền trước assistant message
                 const userQuery =
                   message.role === "assistant" &&
                   idx > 0 &&
                   messages[idx - 1].role === "user"
                     ? messages[idx - 1].content
                     : "";
-
                 return (
                   <ChatMessage
                     key={message.id}
@@ -358,9 +349,11 @@ export default function ChatPage() {
                       setOpenSources((prev) =>
                         prev === citations ? null : citations,
                       );
-                      setOpenSourcesQuery(userQuery); // <-- lưu query
+                      setOpenSourcesQuery(userQuery);
                     }}
-                    onFeedback={handleFeedback}
+                    onFeedback={(messageId, helpful) =>
+                      console.log("Feedback:", { messageId, helpful })
+                    }
                   />
                 );
               })}
@@ -368,42 +361,23 @@ export default function ChatPage() {
             </div>
           </ScrollArea>
         )}
-
         <ChatInput
           onSend={handleSendMessage}
           onStop={handleStopStreaming}
           isStreaming={isStreaming}
-          availableProjects={availableProjects}
-          availableDepts={availableDepts}
-          selectedProjectIds={selectedProjectIds}
-          selectedDeptIds={selectedDeptIds}
-          deptFilterOn={deptFilterOn}
-          userRole={user?.role ?? ""}
-          activeFilterCount={selectedProjectIds.length + (deptFilterOn ? 1 : 0)}
           chatMode={chatMode}
           externalAttach={pendingAttach}
-          onToggleProject={(id) =>
-            setSelectedProjectIds((prev) =>
-              prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
-            )
-          }
-          onToggleDept={(id) =>
-            setSelectedDeptIds((prev) =>
-              prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
-            )
-          }
-          onToggleDeptFilter={() => {
-            setDeptFilterOn((v) => !v);
-            if (deptFilterOn) setSelectedDeptIds([]);
-          }}
           onToggleMode={() =>
             setChatMode((m) => (m === "rag" ? "chatbot" : "rag"))
           }
-          onExternalAttachConsumed={() => setPendingAttach(null)} 
+          onExternalAttachConsumed={() => setPendingAttach(null)}
+          selectedOuiIds={selectedOuiIds}
+          availableOuis={availableOuis}
+          onToggleOui={handleToggleOui}
+          chatSource={chatSource}
+          onChangeChatSource={setChatSource}
         />
       </div>
-
-      {/* ── Sources panel (Vertex AI style) ── */}
       {openSources && (
         <SourcesPanel
           citations={openSources}
@@ -413,9 +387,7 @@ export default function ChatPage() {
           }}
           token={token}
           query={openSourcesQuery}
-          onAttachFile={(text, name) => {
-            setPendingAttach({ text, name });
-          }}
+          onAttachFile={(text, name) => setPendingAttach({ text, name })}
         />
       )}
     </div>

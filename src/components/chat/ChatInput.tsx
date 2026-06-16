@@ -19,8 +19,6 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ChatFilter } from "@/components/chat/ChatFilter";
 import { DrivePicker } from "@/components/chat/DrivePicker";
-import { Project } from "@/services/projects.api";
-import { Department } from "@/services/departments.api";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js`;
 
@@ -30,21 +28,15 @@ interface ChatInputProps {
   isStreaming?: boolean;
   disabled?: boolean;
   placeholder?: string;
-  // Filter props
-  availableProjects: Project[];
-  availableDepts: Department[];
-  selectedProjectIds: string[];
-  selectedDeptIds: string[];
-  deptFilterOn: boolean;
-  userRole: string;
-  activeFilterCount: number;
   chatMode: "rag" | "chatbot";
   externalAttach?: { text: string; name: string } | null;
-  onToggleProject: (id: string) => void;
-  onToggleDept: (id: string) => void;
-  onToggleDeptFilter: () => void;
   onToggleMode: () => void;
   onExternalAttachConsumed?: () => void;
+  selectedOuiIds?: string[];
+  availableOuis?: { id: string; name: string; ou_name: string }[];
+  onToggleOui?: (id: string) => void;
+  chatSource: "rag" | "gmail" | "all";
+  onChangeChatSource: (source: "rag" | "gmail" | "all") => void;
 }
 
 export function ChatInput({
@@ -53,23 +45,19 @@ export function ChatInput({
   isStreaming = false,
   disabled = false,
   placeholder = "Đặt câu hỏi về kiến ​​thức doanh nghiệp...",
-  availableProjects,
-  availableDepts,
-  selectedProjectIds,
-  selectedDeptIds,
-  deptFilterOn,
-  userRole,
-  activeFilterCount,
   chatMode,
   externalAttach,
-  onToggleProject,
-  onToggleDept,
-  onToggleDeptFilter,
   onToggleMode,
   onExternalAttachConsumed,
+  selectedOuiIds = [],
+  availableOuis = [],
+  onToggleOui = () => {},
+  chatSource,
+  onChangeChatSource,
 }: ChatInputProps) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
+  const activeFilterCount = selectedOuiIds.length;
   const [showFilter, setShowFilter] = useState(false);
   const [showDrivePicker, setShowDrivePicker] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -177,9 +165,10 @@ export function ChatInput({
     <div className="border-t border-border bg-background p-4">
       <div className="mx-auto max-w-3xl">
         {/* Mode toggle */}
+        {/* Mode toggle */}
         <div className="flex items-center gap-2 mb-2">
           <button
-            onClick={onToggleMode}
+            onClick={() => chatMode !== "rag" && onToggleMode()}
             className={cn(
               "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors border",
               chatMode === "rag"
@@ -187,11 +176,10 @@ export function ChatInput({
                 : "bg-muted text-muted-foreground border-border hover:bg-muted/80",
             )}
           >
-            <BookOpen className="h-3 w-3" />
-            RAG SMEs
+            <BookOpen className="h-3 w-3" /> RAG SMEs
           </button>
           <button
-            onClick={onToggleMode}
+            onClick={() => chatMode !== "chatbot" && onToggleMode()}
             className={cn(
               "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors border",
               chatMode === "chatbot"
@@ -199,9 +187,33 @@ export function ChatInput({
                 : "bg-muted text-muted-foreground border-border hover:bg-muted/80",
             )}
           >
-            <Bot className="h-3 w-3" />
-            Chatbot
+            <Bot className="h-3 w-3" /> Chatbot
           </button>
+
+          {/* Gmail source filter — chỉ hiện khi RAG mode */}
+          {chatMode === "rag" && (
+            <>
+              <div className="h-4 w-px bg-border mx-1" />
+              {(["rag", "gmail", "all"] as const).map((src) => (
+                <button
+                  key={src}
+                  onClick={() => onChangeChatSource(src)}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors border",
+                    chatSource === src
+                      ? "bg-primary/10 text-primary border-primary/30"
+                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80",
+                  )}
+                >
+                  {src === "rag"
+                    ? "Tài liệu"
+                    : src === "gmail"
+                      ? "Gmail"
+                      : "Tất cả"}
+                </button>
+              ))}
+            </>
+          )}
         </div>
 
         {/* Attached file badge */}
@@ -296,15 +308,9 @@ export function ChatInput({
 
                 {showFilter && (
                   <ChatFilter
-                    availableProjects={availableProjects}
-                    availableDepts={availableDepts}
-                    selectedProjectIds={selectedProjectIds}
-                    selectedDeptIds={selectedDeptIds}
-                    deptFilterOn={deptFilterOn}
-                    userRole={userRole}
-                    onToggleProject={onToggleProject}
-                    onToggleDept={onToggleDept}
-                    onToggleDeptFilter={onToggleDeptFilter}
+                    availableOuis={availableOuis}
+                    selectedOuiIds={selectedOuiIds}
+                    onToggleOui={onToggleOui}
                     onClose={() => setShowFilter(false)}
                   />
                 )}

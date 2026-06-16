@@ -12,6 +12,7 @@ import {
   LogOut,
   ChevronDown,
   Building2,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -22,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { UserRole } from "@/types";
 
 interface NavItem {
   label: string;
@@ -45,6 +45,8 @@ const navItems: NavItem[] = [
     path: "/documents",
     permission: "documents.view",
   },
+  { label: "Gmail", icon: Mail, path: "/gmail", permission: "chat" }, 
+
   {
     label: "Phê duyệt",
     icon: CheckSquare,
@@ -70,13 +72,6 @@ const navItems: NavItem[] = [
     permission: "settings",
   },
 ];
-
-const roleLabels: Record<UserRole, string> = {
-  employee: "Nhân viên",
-  department_manager: "Quản lý phòng ban",
-  director: "Giám đốc",
-  admin_auditor: "Quản trị viên",
-};
 
 export function AppSidebar() {
   const { user, hasPermission, logout, login } = useAuth();
@@ -106,7 +101,9 @@ export function AppSidebar() {
           <span className="text-sm font-semibold text-sidebar-accent-foreground">
             KnowledgeHub
           </span>
-          <span className="text-xs text-sidebar-muted">Hệ thống RAG doanh nghiệp</span>
+          <span className="text-xs text-sidebar-muted">
+            Hệ thống RAG doanh nghiệp
+          </span>
         </div>
       </div>
 
@@ -152,7 +149,7 @@ export function AppSidebar() {
                   {user.name}
                 </p>
                 <p className="text-xs text-sidebar-muted truncate">
-                  {roleLabels[user.role]}
+                  {user.is_corp_member ? "Thành viên công ty" : "Thành viên"}
                 </p>
               </div>
               <ChevronDown className="h-4 w-4 text-sidebar-muted shrink-0" />

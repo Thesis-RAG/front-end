@@ -147,11 +147,16 @@ export async function postMessageStream(
   content: string,
   token: string,
   onToken: (text: string) => void,
-  onDone: (data: { content: string; sources: any[]; messageId: string }) => void,
-  filters?: { project_ids?: string[]; department_ids?: string[] },
+  onDone: (data: {
+    content: string;
+    sources: any[];
+    messageId: string;
+  }) => void,
+  filters?: { oui_ids?: string[] },
   mode: "rag" | "chatbot" = "rag",
-  fileContent?: string,  
-  fileName?: string,      
+  fileContent?: string,
+  fileName?: string,
+  chatSource: "rag" | "gmail" | "all" = "rag",
 ) {
   const res = await fetch(
     `${ENV.API_BASE_URL}/conversations/${conversationId}/messages/stream`,
@@ -163,11 +168,11 @@ export async function postMessageStream(
       },
       body: JSON.stringify({
         content,
-        project_ids: filters?.project_ids ?? null,
-        department_ids: filters?.department_ids ?? null,
+        oui_ids: filters?.oui_ids ?? null,
         mode,
-        file_content: fileContent ?? null,   
-        file_name: fileName ?? null,  
+        chat_source: chatSource,
+        file_content: fileContent ?? null,
+        file_name: fileName ?? null,
       }),
     },
   );
@@ -203,6 +208,7 @@ export async function searchDocuments(
   mode: string,
   token: string,
   topK: number = 10,
+  ouiIds?: string[],
 ) {
   const res = await fetch(`${ENV.API_BASE_URL}/search`, {
     method: "POST",
@@ -210,7 +216,7 @@ export async function searchDocuments(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ query, mode, top_k: topK }),
+    body: JSON.stringify({ query, mode, top_k: topK, oui_ids: ouiIds ?? null }),
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();

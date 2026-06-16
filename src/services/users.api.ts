@@ -1,18 +1,16 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+import type { OuiPositionInfo } from "@/types";
+
 export interface UserRecord {
   id: string;
   email: string;
   name: string;
-  role: string;
-  clearance_level: string;
-  department_id: string | null;
-  department_name?: string;
   status: "active" | "inactive";
+  oui_positions: OuiPositionInfo[];
+  max_clearance: number;
+  is_corp_member: boolean;
 }
-
-export interface RoleRecord { id: string; name: string; }
-export interface ClearanceRecord { id: string; name: string; level: number; }
 
 export async function fetchUsers(token: string | null): Promise<UserRecord[]> {
   const res = await fetch(`${API_BASE}/users`, {
@@ -22,47 +20,8 @@ export async function fetchUsers(token: string | null): Promise<UserRecord[]> {
   return res.json();
 }
 
-export async function fetchRoles(token: string | null): Promise<RoleRecord[]> {
-  const res = await fetch(`${API_BASE}/roles`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error("Failed to fetch roles");
-  return res.json();
-}
-
-export async function fetchClearanceLevels(token: string | null): Promise<ClearanceRecord[]> {
-  const res = await fetch(`${API_BASE}/clearance-levels`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error("Failed to fetch clearance levels");
-  return res.json();
-}
-
-export async function updateUser(
-  userId: string,
-  payload: { role?: string; clearance_level?: string; status?: string },
-  token: string | null,
-): Promise<UserRecord> {
-  const res = await fetch(`${API_BASE}/users/${userId}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? "Failed to update user");
-  }
-  return res.json();
-}
-
 export async function createUser(
-  payload: {
-    email: string; name: string; password: string;
-    role: string; clearance_level: string; department_id: string;
-  },
+  payload: { email: string; name: string; password: string },
   token: string | null,
 ): Promise<UserRecord> {
   const res = await fetch(`${API_BASE}/users`, {
@@ -80,33 +39,22 @@ export async function createUser(
   return res.json();
 }
 
-export async function fetchUserDepartments(
+export async function updateUser(
   userId: string,
+  payload: { status?: string },
   token: string | null,
-): Promise<{ id: string; name: string }[]> {
-  const res = await fetch(`${API_BASE}/users/${userId}/departments`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) throw new Error("Failed to fetch user departments");
-  return res.json();
-}
-
-export async function updateUserDepartments(
-  userId: string,
-  departmentIds: string[],
-  token: string | null,
-): Promise<UserRecord[]> {
-  const res = await fetch(`${API_BASE}/users/${userId}/departments`, {
+): Promise<UserRecord> {
+  const res = await fetch(`${API_BASE}/users/${userId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ department_ids: departmentIds }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? "Failed to update departments");
+    throw new Error(err.detail ?? "Failed to update user");
   }
   return res.json();
 }

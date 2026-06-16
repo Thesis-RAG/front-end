@@ -1,19 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { toast } from "@/hooks/use-toast";
 import {
   Search,
   FileText,
   ExternalLink,
   SlidersHorizontal,
+  X,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  StatusBadge,
-  SensitivityLevelBadge,
-} from "@/components/ui/status-badge";
+import { SensitivityLevelBadge } from "@/components/ui/status-badge";
 import {
   Select,
   SelectContent,
@@ -22,16 +22,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { SearchMode, DocumentStatus, SensitivityLevel } from "@/types";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { SearchMode, SensitivityLevel, SensitivityRank } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { searchDocuments } from "@/services/chat.api";
-import { fetchDepartments, Department } from "@/services/departments.api";
+import {
+  fetchOrgUnits,
+  fetchOrgUnitInstances,
+  OrgUnit,
+  OrgUnitInstance,
+} from "@/services/org_units.api";
 
 interface SearchChunk {
   chunk_id: string;
@@ -44,7 +48,7 @@ interface SearchChunk {
     document_id: string;
     document_title: string;
     document_type: string;
-    sensitivity_level: string;
+    sensitivity: number | string;
     department_id: string;
     page_start: number;
     page_end: number;
@@ -52,50 +56,165 @@ interface SearchChunk {
   };
 }
 
+// ── OUI accordion filter (giống DocumentsPage) ────────────────────────────────
+function OuiFilterAccordion({
+  orgUnits,
+  orgUnitInstances,
+  selectedOuiIds,
+  onChange,
+}: {
+  orgUnits: OrgUnit[];
+  orgUnitInstances: OrgUnitInstance[];
+  selectedOuiIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [expandedOuId, setExpandedOuId] = useState<string | null>(null);
+
+  const toggleOui = (id: string) => {
+    onChange(
+      selectedOuiIds.includes(id)
+        ? selectedOuiIds.filter((x) => x !== id)
+        : [...selectedOuiIds, id],
+    );
+  };
+
+  const visibleOus = orgUnits.filter((ou) =>
+    orgUnitInstances.some((o) => o.ou_id === ou.id),
+  );
+
+  return (
+    <div className="border rounded-md bg-background divide-y">
+      {visibleOus.length === 0 ? (
+        <p className="text-xs text-muted-foreground px-3 py-2">
+          Không có đơn vị nào
+        </p>
+      ) : (
+        visibleOus.map((ou) => {
+          const ouiList = orgUnitInstances.filter((o) => o.ou_id === ou.id);
+          const isExpanded = expandedOuId === ou.id;
+          const selectedCount = ouiList.filter((o) =>
+            selectedOuiIds.includes(o.id),
+          ).length;
+          return (
+            <div key={ou.id}>
+              <button
+                type="button"
+                className="flex items-center justify-between w-full px-3 py-2 text-sm hover:bg-muted transition-colors"
+                onClick={() => setExpandedOuId(isExpanded ? null : ou.id)}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-[13px]">{ou.name}</span>
+                  {selectedCount > 0 && (
+                    <span className="text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
+                      {selectedCount}
+                    </span>
+                  )}
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                />
+              </button>
+              {isExpanded && (
+                <div className="bg-muted/30 border-t">
+                  {ouiList.map((oui) => {
+                    const selected = selectedOuiIds.includes(oui.id);
+                    return (
+                      <button
+                        key={oui.id}
+                        type="button"
+                        className="flex items-center w-full px-5 py-1.5 text-sm hover:bg-muted gap-2"
+                        onClick={() => toggleOui(oui.id)}
+                      >
+                        <div
+                          className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-input"}`}
+                        >
+                          {selected && <Check className="h-3 w-3 text-white" />}
+                        </div>
+                        <span>{oui.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [searchMode, setSearchMode] = useState<SearchMode>("hybrid");
   const [results, setResults] = useState<SearchChunk[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const { token, hasPermission } = useAuth();
-  const canEdit = hasPermission("documents.edit");
-  const hasLevelConfidential = hasPermission("documents.confidential");
-  const hasLevelRestricted = hasPermission("documents.restricted");
-  const hasLevelTopSecret = hasPermission("documents.top_secret");
+  const [filterOpen, setFilterOpen] = useState(false);
 
-  const [departments, setDepartments] = useState<Department[]>([]);
+  const { token, user, isCorpMember } = useAuth();
+
+  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
+  const [orgUnitInstances, setOrgUnitInstances] = useState<OrgUnitInstance[]>(
+    [],
+  );
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<DocumentStatus | "all">(
-    "all",
-  );
   const [sensitivityLevelFilter, setSensitivityLevelFilter] = useState<
-    SensitivityLevel | "all"
+    SensitivityRank | "all"
   >("all");
-  const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  const containsKeyword = (text: string, query: string) => {
-    if (!query) return true;
+  const [ouiFilter, setOuiFilter] = useState<string[]>([]);
 
-    const words = query.toLowerCase().split(/\s+/);
-    const lowerText = text.toLowerCase();
+  // OUI mà user có thể xem (giống DocumentsPage)
+  const allowedOuiIds = useMemo(() => {
+    if (!user || orgUnitInstances.length === 0) return new Set<string>();
+    if (isCorpMember) return new Set(orgUnitInstances.map((o) => o.id));
+    const userOuiIds = new Set(user.oui_positions.map((p) => p.oui_id));
+    const allowed = new Set<string>(userOuiIds);
+    const queue = [...userOuiIds];
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      orgUnitInstances
+        .filter((o) => o.parent_oui_ids.includes(currentId))
+        .forEach((child) => {
+          if (!allowed.has(child.id)) {
+            allowed.add(child.id);
+            queue.push(child.id);
+          }
+        });
+    }
+    return allowed;
+  }, [user, isCorpMember, orgUnitInstances]);
 
-    // tất cả từ phải xuất hiện (AND logic)
-    return words.every((w) => lowerText.includes(w));
+  const allowedOrgUnitInstances = useMemo(
+    () => orgUnitInstances.filter((o) => allowedOuiIds.has(o.id)),
+    [orgUnitInstances, allowedOuiIds],
+  );
+
+  useEffect(() => {
+    fetchOrgUnits(token)
+      .then(setOrgUnits)
+      .catch(() => {});
+    fetchOrgUnitInstances(token)
+      .then(setOrgUnitInstances)
+      .catch(() => {});
+  }, []);
+
+  const containsKeyword = (text: string, q: string) => {
+    if (!q) return true;
+    const words = q.toLowerCase().split(/\s+/);
+    const lower = text.toLowerCase();
+    return words.every((w) => lower.includes(w));
   };
+
   const filteredResults = results.filter((r) => {
     const matchSensitivity =
       sensitivityLevelFilter === "all" ||
-      r.metadata.sensitivity_level === sensitivityLevelFilter;
-
-    const matchDept =
-      departmentFilter === "all" ||
-      r.metadata.department_id === departmentFilter;
-
+      Number(r.metadata.sensitivity) === sensitivityLevelFilter;
     const matchKeyword =
       searchMode !== "keyword" || containsKeyword(r.document_text, query);
-
-    return matchSensitivity && matchDept && matchKeyword;
+    return matchSensitivity && matchKeyword;
   });
 
   const handleSearch = async () => {
@@ -103,7 +222,13 @@ export default function SearchPage() {
     setIsSearching(true);
     setHasSearched(true);
     try {
-      const data = await searchDocuments(query, searchMode, token);
+      const data = await searchDocuments(
+        query,
+        searchMode,
+        token,
+        10,
+        ouiFilter.length > 0 ? ouiFilter : undefined,
+      );
       setResults(data);
     } catch {
       toast({ variant: "destructive", title: "Tìm kiếm thất bại" });
@@ -113,28 +238,18 @@ export default function SearchPage() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSearch();
-    }
+    if (e.key === "Enter") handleSearch();
   };
 
   const clearFilters = () => {
-    setStatusFilter("all");
     setSensitivityLevelFilter("all");
-    setDepartmentFilter("all");
+    setOuiFilter([]);
   };
 
   const activeFiltersCount = [
-    statusFilter,
-    sensitivityLevelFilter,
-    departmentFilter,
-  ].filter((f) => f !== "all").length;
-
-  useEffect(() => {
-    fetchDepartments(token)
-      .then(setDepartments)
-      .catch(() => {});
-  }, []);
+    sensitivityLevelFilter !== "all" ? 1 : 0,
+    ouiFilter.length > 0 ? 1 : 0,
+  ].reduce((a, b) => a + b, 0);
 
   return (
     <div className="flex h-full flex-col">
@@ -172,120 +287,19 @@ export default function SearchPage() {
               </SelectContent>
             </Select>
 
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="group gap-2 text-[12px]">
-                  <SlidersHorizontal className="h-4 w-4" />
-                  Bộ lọc
-                  {activeFiltersCount > 0 && (
-                    <Badge
-                      className="
-        ml-1 flex h-5 w-5 items-center justify-center rounded-full
-        bg-primary p-0 text-xs text-primary-foreground
-        transition-colors
-        group-hover:bg-white
-        group-hover:text-primary
-      "
-                    >
-                      {activeFiltersCount}
-                    </Badge>
-                  )}
-                </Button>
-              </SheetTrigger>
-              <SheetContent>
-                <SheetHeader>
-                  <SheetTitle className="text-[16px]">
-                    Bộ lọc tìm kiếm
-                  </SheetTitle>
-                </SheetHeader>
-                <div className="mt-6 space-y-6">
-                  {canEdit && (
-                    <div>
-                      <label className="text-sm font-medium">Phòng ban</label>
-
-                      <Select
-                        value={departmentFilter}
-                        onValueChange={(v) => setDepartmentFilter(v)}
-                      >
-                        <SelectTrigger className="mt-2 text-[12.5px]">
-                          <SelectValue placeholder="Tất cả" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Tất cả</SelectItem>
-                          {departments.map((d) => (
-                            <SelectItem key={d.id} value={d.id}>
-                              {d.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="text-sm font-medium">
-                      Mức độ nhạy cảm
-                    </label>
-                    <Select
-                      value={sensitivityLevelFilter}
-                      onValueChange={(v) =>
-                        setSensitivityLevelFilter(v as SensitivityLevel | "all")
-                      }
-                    >
-                      <SelectTrigger className="mt-2 text-[12.5px]">
-                        <SelectValue placeholder="All Sensitivity Levels" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Tất cả</SelectItem>
-                        <SelectItem value="public">Công khai</SelectItem>
-                        <SelectItem value="internal">Nội bộ</SelectItem>
-                        {hasLevelConfidential && (
-                          <SelectItem value="confidential">Hạn chế</SelectItem>
-                        )}
-                        {hasLevelRestricted && (
-                          <SelectItem value="restricted">Mật</SelectItem>
-                        )}
-                        {hasLevelTopSecret && (
-                          <SelectItem value="top_secret">Tuyệt mật</SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium">Trạng thái</label>
-                    <Select
-                      value={statusFilter}
-                      onValueChange={(v) =>
-                        setStatusFilter(v as DocumentStatus | "all")
-                      }
-                    >
-                      <SelectTrigger className="mt-2 text-[12.5px]">
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Tất cả</SelectItem>
-                        <SelectItem value="draft">Bản nháp</SelectItem>
-                        <SelectItem value="uploaded">Đã tải lên</SelectItem>
-                        <SelectItem value="review">Đang xem xét</SelectItem>
-                        <SelectItem value="approved">Đã phê duyệt</SelectItem>
-                        <SelectItem value="rejected">Bị từ chối</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {activeFiltersCount > 0 && (
-                    <Button
-                      variant="outline"
-                      className="w-full bg-destructive/30 text-destructive hover:bg-destructive/20 hover:text-destructive transition-colors mt-4 text-[12px]"
-                      onClick={clearFilters}
-                    >
-                      Xóa tất cả bộ lọc
-                    </Button>
-                  )}
-                </div>
-              </SheetContent>
-            </Sheet>
+            <Button
+              variant="outline"
+              className="group gap-2 text-[12px]"
+              onClick={() => setFilterOpen(true)}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Bộ lọc
+              {activeFiltersCount > 0 && (
+                <Badge className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary p-0 text-xs text-primary-foreground transition-colors group-hover:bg-white group-hover:text-primary">
+                  {activeFiltersCount}
+                </Badge>
+              )}
+            </Button>
 
             <Button
               onClick={handleSearch}
@@ -296,9 +310,9 @@ export default function SearchPage() {
             </Button>
           </div>
 
-          {/* Search mode indicator */}
-          <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="text-[12px]">Chế độ lọc:</span>
+          {/* Search mode + active filter chips */}
+          <div className="mt-3 flex items-center gap-2 flex-wrap text-sm text-muted-foreground">
+            <span className="text-[12px]">Chế độ:</span>
             <Badge variant="outline" className="font-normal">
               {searchMode === "hybrid"
                 ? "Kết hợp"
@@ -306,6 +320,28 @@ export default function SearchPage() {
                   ? "Chỉ từ khóa"
                   : "Chỉ ngữ nghĩa"}
             </Badge>
+            {sensitivityLevelFilter !== "all" && (
+              <Badge
+                variant="secondary"
+                className="gap-1 font-normal text-[11px]"
+              >
+                {sensitivityLevelFilter}
+                <button onClick={() => setSensitivityLevelFilter("all")}>
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
+            {ouiFilter.length > 0 && (
+              <Badge
+                variant="secondary"
+                className="gap-1 font-normal text-[11px]"
+              >
+                {ouiFilter.length} đơn vị
+                <button onClick={() => setOuiFilter([])}>
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
+            )}
           </div>
 
           {/* Results */}
@@ -342,7 +378,7 @@ export default function SearchPage() {
                   <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
                   <h3 className="mt-4 font-medium">Không tìm thấy kết quả</h3>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Hãy thay đổi từ khóa hoặc thay đổi bộ lọc để có kết quả khác
+                    Hãy thay đổi từ khóa hoặc bộ lọc
                   </p>
                 </div>
               )
@@ -358,10 +394,79 @@ export default function SearchPage() {
           </div>
         </div>
       </div>
+
+      {/* Filter Dialog — giữa màn hình */}
+      <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
+        <DialogContent className="sm:max-w-[480px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-[16px]">Bộ lọc tìm kiếm</DialogTitle>
+          </DialogHeader>
+          <div className="mt-2 space-y-6">
+            {/* Đơn vị tổ chức */}
+            <div>
+              <label className="text-sm font-medium">Đơn vị tổ chức</label>
+              <div className="mt-2">
+                <OuiFilterAccordion
+                  orgUnits={orgUnits}
+                  orgUnitInstances={allowedOrgUnitInstances}
+                  selectedOuiIds={ouiFilter}
+                  onChange={setOuiFilter}
+                />
+              </div>
+            </div>
+
+            {/* Mức độ nhạy cảm */}
+            <div>
+              <label className="text-sm font-medium">Mức độ nhạy cảm</label>
+              <Select
+                value={String(sensitivityLevelFilter)}
+                onValueChange={(v) =>
+                  setSensitivityLevelFilter(
+                    v === "all" ? "all" : (Number(v) as SensitivityRank),
+                  )
+                }
+              >
+                <SelectTrigger className="mt-2 text-[12.5px]">
+                  <SelectValue placeholder="Tất cả" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tất cả</SelectItem>
+                  <SelectItem value="1">Công khai</SelectItem>
+                  <SelectItem value="2">Nội bộ</SelectItem>
+                  <SelectItem value="3">Hạn chế</SelectItem>
+                  <SelectItem value="4">Mật</SelectItem>
+                  <SelectItem value="5">Tuyệt mật</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {activeFiltersCount > 0 && (
+              <Button
+                variant="outline"
+                className="w-full bg-destructive/30 text-destructive hover:bg-destructive/20 hover:text-destructive transition-colors text-[12px]"
+                onClick={clearFilters}
+              >
+                Xóa tất cả bộ lọc
+              </Button>
+            )}
+
+            <Button
+              className="w-full text-[12px]"
+              onClick={() => {
+                setFilterOpen(false);
+                handleSearch();
+              }}
+            >
+              Áp dụng & Tìm kiếm
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
+// ── SearchResultCard (giữ nguyên) ─────────────────────────────────────────────
 function SearchResultCard({
   result,
   query,
@@ -371,39 +476,25 @@ function SearchResultCard({
 }) {
   const highlightText = (text: string) => {
     if (!query) return text;
-
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-
     const lowerText = text.toLowerCase();
-
     let ranges: [number, number][] = [];
-
-    // tìm tất cả vị trí match của từng word
     words.forEach((word) => {
       let startIndex = 0;
-
       while (true) {
         const index = lowerText.indexOf(word, startIndex);
         if (index === -1) break;
-
         ranges.push([index, index + word.length]);
         startIndex = index + word.length;
       }
     });
-
     if (ranges.length === 0) return text;
-
-    // 🔥 merge các range chồng hoặc liền kề
     ranges.sort((a, b) => a[0] - b[0]);
-
     const merged: [number, number][] = [];
     let current = ranges[0];
-
     for (let i = 1; i < ranges.length; i++) {
       const next = ranges[i];
-
       if (next[0] <= current[1] + 1) {
-        // overlap hoặc liền kề
         current[1] = Math.max(current[1], next[1]);
       } else {
         merged.push(current);
@@ -411,29 +502,18 @@ function SearchResultCard({
       }
     }
     merged.push(current);
-
-    // build JSX
     const result = [];
     let lastIndex = 0;
-
     merged.forEach(([start, end], i) => {
-      if (start > lastIndex) {
-        result.push(text.slice(lastIndex, start));
-      }
-
+      if (start > lastIndex) result.push(text.slice(lastIndex, start));
       result.push(
         <mark key={i} className="bg-yellow-100 text-foreground rounded px-0.5">
           {text.slice(start, end)}
         </mark>,
       );
-
       lastIndex = end;
     });
-
-    if (lastIndex < text.length) {
-      result.push(text.slice(lastIndex));
-    }
-
+    if (lastIndex < text.length) result.push(text.slice(lastIndex));
     return result;
   };
 
@@ -446,7 +526,7 @@ function SearchResultCard({
               {result.metadata.document_title}
             </h3>
             <SensitivityLevelBadge
-              level={result.metadata.sensitivity_level as SensitivityLevel}
+              level={Number(result.metadata.sensitivity)}
             />
             <Badge variant="outline" className="text-xs font-normal">
               Trang {result.metadata.page_start}–{result.metadata.page_end}
@@ -481,11 +561,9 @@ function SearchResultCard({
           </Button>
         </div>
       </div>
-
       <p className="mt-3 text-[13px] text-muted-foreground line-clamp-4">
         {highlightText(result.document_text)}
       </p>
-
       <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
         <span>Từ khóa: {Math.round(result.keyword_score * 100)}%</span>
         <span>·</span>

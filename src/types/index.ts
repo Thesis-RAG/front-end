@@ -1,11 +1,43 @@
-// User roles
-export type UserRole =
-  | "employee"
-  | "department_manager"
-  | "director"
-  | "admin_auditor";
+// ── Org structure ─────────────────────────────────────────────────────────────
 
-// Document status
+export interface OuiPositionInfo {
+  oui_id: string;
+  oui_name: string;
+  ou_id: string;
+  ou_name: string;
+  position_id: string;
+  position_name: string;
+  clearance: number;
+  parent_oui_ids: string[];
+}
+
+export interface OrgUnit {
+  id: string;
+  name: string;
+  parent_id: string | null;
+}
+
+export interface OrgUnitInstance {
+  id: string;
+  name: string;
+  ou_id: string;
+  parent_oui_ids: string[];
+}
+
+// ── User ──────────────────────────────────────────────────────────────────────
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+  oui_positions: OuiPositionInfo[];
+  max_clearance: number;
+  is_corp_member: boolean;
+}
+
+// ── Document ──────────────────────────────────────────────────────────────────
+
 export type DocumentStatus =
   | "draft"
   | "uploaded"
@@ -15,7 +47,26 @@ export type DocumentStatus =
   | "archived"
   | "ready";
 
-// Sensitivity levels
+// Sensitivity là số nguyên 1-5
+export const SENSITIVITY_LEVEL: Record<number, string> = {
+  1: "Công khai",
+  2: "Nội bộ",
+  3: "Hạn chế",
+  4: "Mật",
+  5: "Tuyệt mật",
+};
+
+export type SensitivityRank = 1 | 2 | 3 | 4 | 5;
+
+export const SENSITIVITY_COLOR: Record<number, string> = {
+  1: "bg-green-100 text-green-700",
+  2: "bg-blue-100 text-blue-700",
+  3: "bg-yellow-100 text-yellow-700",
+  4: "bg-orange-100 text-orange-700",
+  5: "bg-red-100 text-red-700",
+};
+
+// Giữ lại SensitivityLevel string cho các component cũ chưa migrate
 export type SensitivityLevel =
   | "public"
   | "internal"
@@ -23,30 +74,37 @@ export type SensitivityLevel =
   | "restricted"
   | "top_secret";
 
-// User type
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  department: string;
-  avatar?: string;
+export const SENSITIVITY_RANK: Record<SensitivityLevel, number> = {
+  public: 1,
+  internal: 2,
+  confidential: 3,
+  restricted: 4,
+  top_secret: 5,
+};
+
+export interface DocumentOuiInfo {
+  oui_id: string;
+  oui_name: string;
+  ou_name: string;
 }
 
-// Document type
 export interface Document {
   id: string;
   title: string;
-  ownerDepartment: string;
-  sensitivity_level: SensitivityLevel;
-  status: DocumentStatus;
-  currentVersion: string;
-  updatedAt: string;
-  createdAt: string;
+  description?: string;
+  oui_ids: string[];           // multi OUI
+  owner_user_id: string;
+  document_type: string;
+  sensitivity: number;         // 1-5
+  data_type: string;
   tags: string[];
+  status: DocumentStatus;
+  current_version_id?: string;
+  version_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
-// Document version
 export interface DocumentVersion {
   id: string;
   documentId: string;
@@ -57,7 +115,8 @@ export interface DocumentVersion {
   changelog?: string;
 }
 
-// Chat message
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -70,7 +129,6 @@ export interface ChatMessage {
   attachedFileName?: string;
 }
 
-// Citation
 export interface Citation {
   id: string;
   documentId: string;
@@ -82,7 +140,6 @@ export interface Citation {
   relevance?: number;
 }
 
-// Chat conversation
 export interface Conversation {
   id: string;
   title: string;
@@ -91,34 +148,25 @@ export interface Conversation {
   messageCount: number;
 }
 
-// Search result
+// ── Search ────────────────────────────────────────────────────────────────────
+
 export interface SearchResult {
   id: string;
   documentId: string;
   title: string;
   snippet: string;
   sectionPath: string;
-  sensitivity_level: SensitivityLevel;
+  sensitivity: number;
   status: DocumentStatus;
   updatedAt: string;
   score: number;
   tags: string[];
 }
 
-// Search mode
 export type SearchMode = "keyword" | "semantic" | "hybrid";
 
-// Feedback
-export interface Feedback {
-  id: string;
-  messageId: string;
-  helpful: boolean;
-  reason?: string;
-  expectedAnswer?: string;
-  createdAt: string;
-}
+// ── Audit ─────────────────────────────────────────────────────────────────────
 
-// Audit log entry
 export interface AuditLogEntry {
   id: string;
   traceId: string;
@@ -132,7 +180,8 @@ export interface AuditLogEntry {
   timestamp: string;
 }
 
-// Job
+// ── Job ───────────────────────────────────────────────────────────────────────
+
 export interface Job {
   id: string;
   type: "ingestion" | "indexing" | "embedding" | "cleanup";
@@ -143,4 +192,13 @@ export interface Job {
   startedAt?: string;
   endedAt?: string;
   error?: string;
+}
+
+export interface Feedback {
+  id: string;
+  messageId: string;
+  helpful: boolean;
+  reason?: string;
+  expectedAnswer?: string;
+  createdAt: string;
 }
