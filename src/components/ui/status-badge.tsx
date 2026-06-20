@@ -18,7 +18,7 @@ const statusConfig: Record<
     label: "Đã tải lên",
     className: "bg-yellow-100 text-yellow-700 border-yellow-200",
   },
-  processing: {                                    
+  processing: {
     label: "Đang xử lý",
     className: "bg-purple-100 text-purple-700 border-purple-200",
   },
@@ -62,36 +62,32 @@ export function StatusBadge({ status, className }: StatusBadgeProps) {
 }
 
 interface SensitivityLevelBadgeProps {
-  level: SensitivityLevel;
+  level: number;
   className?: string;
 }
 
-const sensitivityLevelConfig: Record<
-  SensitivityLevel,
-  { label: string; className: string }
-> = {
-  public: {
+const sensitivityLevelConfig = {
+  1: {
     label: "Công khai",
     className:
       "bg-sensitivity_level-public/15 text-sensitivity_level-public border-sensitivity_level-public/30",
   },
-  internal: {
+  2: {
     label: "Nội bộ",
     className:
       "bg-sensitivity_level-internal/15 text-sensitivity_level-internal border-sensitivity_level-internal/30",
   },
-  confidential: {
+  3: {
     label: "Hạn chế",
-
     className:
       "bg-sensitivity_level-confidential/15 text-sensitivity_level-confidential border-sensitivity_level-confidential/30",
   },
-  restricted: {
+  4: {
     label: "Mật",
     className:
       "bg-sensitivity_level-restricted/15 text-sensitivity_level-restricted border-sensitivity_level-restricted/30",
   },
-  top_secret: {
+  5: {
     label: "Tuyệt mật",
     className:
       "bg-sensitivity_level-top_secret/15 text-sensitivity_level-top_secret border-sensitivity_level-top_secret/30",
@@ -102,7 +98,9 @@ export function SensitivityLevelBadge({
   level,
   className,
 }: SensitivityLevelBadgeProps) {
+  console.log("level =", level, "type =", typeof level);
   const config = sensitivityLevelConfig[level];
+  console.log("config =", config);
 
   return (
     <span

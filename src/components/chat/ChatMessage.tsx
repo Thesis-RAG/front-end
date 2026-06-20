@@ -122,7 +122,7 @@ export function ChatMessage({
                 onClick={() => onSourcesClick(message.citations!)}
               >
                 <BookOpen className="h-3 w-3" />
-                Sources
+                Nguồn
                 <span
                   // 2. Thêm group-hover để đổi màu nền và màu chữ của con số khi hover vào Button
                   className="ml-0.5 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-semibold transition-colors group-hover:bg-background group-hover:text-foreground"
@@ -201,7 +201,7 @@ export function ChatMessage({
                   className="h-8 px-2 text-xs text-muted-foreground"
                   onClick={() => setShowTrace(!showTrace)}
                 >
-                  Details
+                  Chi tiết
                   {showTrace ? (
                     <ChevronUp className="ml-1 h-3 w-3" />
                   ) : (

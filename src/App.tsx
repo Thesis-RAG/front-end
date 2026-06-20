@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import LoginPage from "@/pages/LoginPage";
 import ForbiddenPage from "@/pages/ForbiddenPage";
 import ChatPage from "@/pages/ChatPage";
+import GmailPage from "@/pages/GmailPage";
 import SearchPage from "@/pages/SearchPage";
 import DocumentsPage from "@/pages/DocumentsPage";
 import ApprovalsPage from "@/pages/ApprovalsPage";
@@ -53,6 +54,9 @@ const App = () => (
                   </ProtectedRoute>
                 }
               />
+
+              <Route path="/gmail" element={<GmailPage />} />
+              <Route path="/gmail/callback" element={<GmailPage />} />
 
               <Route
                 path="/documents"

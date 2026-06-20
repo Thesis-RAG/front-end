@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { X, Eye, Plus, FileText, FileCode2, File } from "lucide-react";
+import { X, Eye, Plus, FileText, FileCode2, File, Mail } from "lucide-react";
 import { Citation } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -18,19 +18,25 @@ interface SourcesPanelProps {
   onAttachFile?: (text: string, fileName: string) => void;
 }
 
-function getFileIcon(title: string) {
-  const lower = title.toLowerCase();
+function isGmailSource(citation: Citation) {
+  return citation.documentId?.startsWith("gmail_");
+}
+
+function getFileIcon(citation: Citation) {
+  if (isGmailSource(citation)) return Mail;
+  const lower = (citation.documentTitle ?? "").toLowerCase();
   if (lower.endsWith(".docx") || lower.endsWith(".doc")) return FileCode2;
   if (lower.endsWith(".pdf")) return FileText;
   return File;
 }
 
-function getFileTypeLabel(title: string) {
-  const lower = title.toLowerCase();
+function getFileTypeLabel(citation: Citation) {
+  if (isGmailSource(citation)) return "Gmail";
+  const lower = (citation.documentTitle ?? "").toLowerCase();
   if (lower.endsWith(".docx") || lower.endsWith(".doc"))
-    return "Microsoft Word (docx)";
-  if (lower.endsWith(".pdf")) return "PDF document";
-  return "Document";
+    return "Microsoft Word";
+  if (lower.endsWith(".pdf")) return "Tài liệu PDF";
+  return "Tài liệu";
 }
 
 /** Vietnamese stop-words + common English stop-words to ignore */
@@ -56,23 +62,26 @@ function textContainsKeyword(text: string, keywords: string[]): boolean {
 
 /** Find the best excerpt window (up to ~200 chars) that contains a keyword */
 function getBestExcerptWindow(excerpt: string, keywords: string[]): string {
-  if (!keywords.length || !excerpt) return excerpt;
+  if (!excerpt) return "";
+
+  // Hard limit trước tiên — tránh chuỗi dài không có space
+  const MAX_LEN = 150;
+
+  if (!keywords.length) return excerpt.slice(0, MAX_LEN);
+
   const lower = excerpt.toLowerCase();
   let bestIdx = -1;
   for (const kw of keywords) {
     const idx = lower.indexOf(kw);
-    if (idx !== -1 && (bestIdx === -1 || idx < bestIdx)) {
-      bestIdx = idx;
-    }
+    if (idx !== -1 && (bestIdx === -1 || idx < bestIdx)) bestIdx = idx;
   }
-  if (bestIdx === -1) return excerpt;
-  const windowSize = 200;
-  const start = Math.max(0, bestIdx - 60);
-  const end = Math.min(excerpt.length, start + windowSize);
+
+  if (bestIdx === -1) return excerpt.slice(0, MAX_LEN);
+
+  const start = Math.max(0, bestIdx - 40);
+  const end = Math.min(excerpt.length, start + MAX_LEN);
   const slice = excerpt.slice(start, end);
-  const prefix = start > 0 ? "..." : "";
-  const suffix = end < excerpt.length ? "..." : "";
-  return prefix + slice + suffix;
+  return (start > 0 ? "..." : "") + slice + (end < excerpt.length ? "..." : "");
 }
 
 /** Highlight keywords in text, returning an array of React-renderable parts */
@@ -258,11 +267,11 @@ export function SourcesPanel({
   };
 
   return (
-    <div className="flex h-full w-[380px] flex-col border-l border-border bg-card animate-slide-in-right">
+    <div className="flex h-full w-[380px] min-w-0 max-w-full flex-col border-l border-border bg-card animate-slide-in-right overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm">Sources</span>
+          <span className="font-semibold text-sm">Nguồn tham chiếu</span>
           {filteredCitations.length > 0 && (
             <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
               {filteredCitations.length}
@@ -279,21 +288,22 @@ export function SourcesPanel({
         </Button>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-3 space-y-1">
+      <ScrollArea className="flex-1 w-full">
+        <div className="p-3 space-y-1 w-full" style={{ maxWidth: "380px" }}>
           <p className="px-1 pb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            From company data
+            Từ dữ liệu công ty
           </p>
 
           {filteredCitations.length === 0 && (
             <p className="px-1 py-4 text-xs text-muted-foreground text-center">
-              No sources matched the query keywords.
+              Không tìm thấy nguồn tham chiếu phù hợp với truy vấn. Hãy thử điều
+              chỉnh câu hỏi hoặc thêm nhiều chi tiết hơn để có kết quả tốt hơn.
             </p>
           )}
 
           {filteredCitations.map((citation) => {
-            const Icon = getFileIcon(citation.documentTitle);
-            const typeLabel = getFileTypeLabel(citation.documentTitle);
+            const Icon = getFileIcon(citation);
+            const typeLabel = getFileTypeLabel(citation);
             const pct = citation.relevance
               ? Math.round(citation.relevance * 100)
               : null;
@@ -309,22 +319,36 @@ export function SourcesPanel({
               <div
                 key={citation.id}
                 className={cn(
-                  "group rounded-lg border border-border bg-background transition-colors",
+                  "group rounded-lg border border-border bg-background transition-colors overflow-hidden",
                   isExpanded && "border-primary/30",
                 )}
               >
                 {/* Card header row */}
                 <div
-                  className="flex flex-col p-3 cursor-pointer relative"
+                  className="flex flex-col p-3 cursor-pointer relative min-w-0 w-full"
                   onClick={() => setExpandedId(isExpanded ? null : citation.id)}
                 >
                   {/* ROW 1: Type label + relevance + action buttons */}
                   <div className="flex items-center mb-2 w-full">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-blue-50 dark:bg-blue-950/30">
-                      <Icon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                    <div
+                      className={cn(
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded",
+                        isGmailSource(citation)
+                          ? "bg-red-50 dark:bg-red-950/30"
+                          : "bg-blue-50 dark:bg-blue-950/30",
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-3.5 w-3.5",
+                          isGmailSource(citation)
+                            ? "text-red-500"
+                            : "text-blue-600 dark:text-blue-400",
+                        )}
+                      />
                     </div>
-                    <div className="flex items-center gap-1.5 ml-2">
-                      <span className="text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-1.5 ml-2 min-w-0 overflow-hidden">
+                      <span className="text-[11px] text-muted-foreground truncate">
                         {typeLabel}
                       </span>
 
@@ -343,38 +367,42 @@ export function SourcesPanel({
                       className="flex items-center gap-1 shrink-0 ml-auto justify-end"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                        disabled={openingId === citation.id}
-                        onClick={() => handleOpenFile(citation)}
-                        title="Open document"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => handleAddToContext(citation)}
-                        disabled={attachingId !== null}
-                        title="Add to context"
-                      >
-                        {attachingId === citation.id ? (
-                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        ) : (
-                          <Plus className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
+                      {!isGmailSource(citation) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          disabled={openingId === citation.id}
+                          onClick={() => handleOpenFile(citation)}
+                          title="Mở tài liệu"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {!isGmailSource(citation) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleAddToContext(citation)}
+                          disabled={attachingId !== null}
+                          title="Thêm vào ngữ cảnh"
+                        >
+                          {attachingId === citation.id ? (
+                            <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          ) : (
+                            <Plus className="h-3.5 w-3.5" />
+                          )}
+                        </Button>
+                      )}
                     </div>
                   </div>
 
                   {/* ROW 2: Title */}
-                  <div className="flex items-center gap-2.5 mb-1.5">
-                    <p className="text-sm font-semibold leading-snug truncate flex-1">
+                  <div className="flex items-center gap-2.5 mb-1.5 min-w-0">
+                    <p className="text-sm font-semibold leading-snug truncate flex-1 max-w-full">
                       <HighlightedExcerpt
-                        text={citation.documentTitle}
+                        text={(citation.documentTitle ?? "").slice(0, 60)}
                         keywords={keywords}
                       />
                     </p>
@@ -382,7 +410,7 @@ export function SourcesPanel({
 
                   {/* ROW 3: Excerpt snippet with keyword highlight */}
                   {displayExcerpt && (
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed overflow-hidden break-all">
                       <HighlightedExcerpt
                         text={displayExcerpt}
                         keywords={keywords}
@@ -400,7 +428,7 @@ export function SourcesPanel({
                       </p>
                     )}
                     {citation.excerpt && (
-                      <div className="rounded-md bg-muted/60 p-2.5 text-xs leading-relaxed text-foreground">
+                      <div className="rounded-md bg-muted/60 p-2.5 text-xs leading-relaxed text-foreground overflow-hidden break-all w-full">
                         <HighlightedExcerpt
                           text={citation.excerpt}
                           keywords={keywords}
@@ -410,7 +438,7 @@ export function SourcesPanel({
                     {pct !== null && (
                       <div className="flex items-center gap-2 pt-1">
                         <span className="text-xs text-muted-foreground">
-                          Relevance:
+                          Độ tương đồng:
                         </span>
                         <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
