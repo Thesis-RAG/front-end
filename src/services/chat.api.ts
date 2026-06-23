@@ -221,3 +221,28 @@ export async function searchDocuments(
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
+
+
+export async function generateConversationTitle(
+  conversationId: string,
+  firstMessage: string,
+  token: string,
+): Promise<string> {
+  const res = await fetch(
+    `${ENV.API_BASE_URL}/conversations/${conversationId}/generate-title`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ first_message: firstMessage }),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.title ?? firstMessage.slice(0, 40);
+}

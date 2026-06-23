@@ -17,6 +17,7 @@ import {
   getListConversationMessage,
   updateConversation,
   deleteConversation,
+  generateConversationTitle,
 } from "@/services/chat.api";
 import { fetchOrgUnitInstances, fetchOrgUnits } from "@/services/org_units.api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,8 +43,15 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [openSources, setOpenSources] = useState<Citation[] | null>(null);
   const [openSourcesQuery, setOpenSourcesQuery] = useState<string>("");
+  const [hoveredCitationId, setHoveredCitationId] = useState<string | null>(
+    null,
+  );
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const handleCitationClick = (citations: Citation[], citationId: string) => {
+    setOpenSources(citations);
+    setHoveredCitationId(citationId);
+  };
 
   const handleToggleOui = (id: string) => {
     setSelectedOuiIds((prev) =>
@@ -54,20 +62,26 @@ export default function ChatPage() {
   const handleGetConversationMessage = async (conversationId?: string) => {
     if (!conversationId) return;
     const result = await getListConversationMessage(conversationId, token);
-    const mapped: ChatMessageType[] = result
-      .flatMap((item: any) => {
-        const userMsg: ChatMessageType = {
-          id: item.messageId,
-          role: "user",
-          content: item.content,
-          timestamp: item.createdAt,
-        };
-        const assistant = item.assistantMessage;
-        const assistantMsg: ChatMessageType = {
-          id: assistant?.id ?? `${item.messageId}-assistant`,
+
+    const mapped: ChatMessageType[] = [];
+
+    for (const item of result) {
+      // Luôn push user message
+      mapped.push({
+        id: item.messageId,
+        role: "user",
+        content: item.content,
+        timestamp: item.createdAt,
+      });
+
+      // Chỉ push assistant nếu có nội dung thật
+      const assistant = item.assistantMessage;
+      if (assistant?.content && assistant.content.trim().length > 0) {
+        mapped.push({
+          id: assistant.id,
           role: "assistant",
-          content: assistant?.content ?? "",
-          timestamp: assistant?.createdAt ?? item.createdAt,
+          content: assistant.content,
+          timestamp: assistant.createdAt ?? item.createdAt,
           citations: (item.sources || []).map((s: any, idx: number) => ({
             id: s.documentId + (s.versionId || "") + idx,
             documentId: s.documentId,
@@ -79,14 +93,13 @@ export default function ChatPage() {
             relevance: s.relevance,
           })),
           traceId: item.traceId,
-          status: assistant?.status ?? "success",
-        };
-        return [userMsg, assistantMsg];
-      })
-      .sort(
-        (a, b) =>
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-      );
+          status: assistant.status ?? "success",
+        });
+      }
+      // Nếu assistant null/rỗng → không push gì, user message đứng một mình
+    }
+
+    // Không sort — backend đã trả đúng thứ tự theo created_at của user message
     setMessages(mapped);
     return mapped;
   };
@@ -202,6 +215,9 @@ export default function ChatPage() {
     fileName?: string,
   ) => {
     let conversationId = activeConversationId;
+    const isFirstMessage =
+      messages.filter((m) => m.role === "user").length === 0;
+
     if (!conversationId) {
       const result = await createConversation(
         { title: "Cuộc trò chuyện" },
@@ -269,6 +285,19 @@ export default function ChatPage() {
             ),
           );
           setIsStreaming(false);
+          if (isFirstMessage) {
+            generateConversationTitle(conversationId!, content, token)
+              .then((title) => {
+                setConversations((convs) =>
+                  convs.map((c) =>
+                    c.id === conversationId ? { ...c, title } : c,
+                  ),
+                );
+              })
+              .catch((err) => {
+                console.error("generateConversationTitle failed", err);
+              });
+          }
         },
         { oui_ids: selectedOuiIds.length > 0 ? selectedOuiIds : undefined },
         chatMode,
@@ -297,7 +326,6 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-
       <ChatSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -308,27 +336,51 @@ export default function ChatPage() {
       />
       <div className="flex flex-1 flex-col min-w-0">
         {messages.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center p-8">
-            <div
-              className={cn(
-                "flex h-16 w-16 items-center justify-center rounded-full",
-                chatMode === "rag" ? "bg-primary/10" : "bg-teal-500/10",
-              )}
-            >
-              {chatMode === "rag" ? (
-                <BookOpen className="h-8 w-8 text-primary" />
-              ) : (
-                <Bot className="h-8 w-8 text-teal-600" />
-              )}
+          <div className="flex flex-1 flex-col items-center justify-center p-8 select-none">
+            <div className="relative mb-6">
+              <div className={cn(
+                "flex h-20 w-20 items-center justify-center rounded-2xl shadow-card-md",
+                chatMode === "rag"
+                  ? "bg-gradient-to-br from-primary/20 to-blue-500/10"
+                  : "bg-gradient-to-br from-teal-500/20 to-emerald-500/10",
+              )}>
+                {chatMode === "rag" ? (
+                  <BookOpen className="h-9 w-9 text-primary" />
+                ) : (
+                  <Bot className="h-9 w-9 text-teal-600" />
+                )}
+              </div>
+              <div className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 shadow-sm">
+                <span className="h-2 w-2 rounded-full bg-white" />
+              </div>
             </div>
-            <h2 className="mt-4 text-xl font-semibold">
+            <h2 className="text-2xl font-bold text-foreground tracking-tight">
               {chatMode === "rag" ? "Trợ lý RAG SMEs" : "Trợ lý AI"}
             </h2>
-            <p className="mt-2 max-w-md text-center text-muted-foreground">
+            <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground leading-relaxed">
               {chatMode === "rag"
-                ? "Hãy đặt câu hỏi về các quy trình, chính sách và kiến thức doanh nghiệp."
+                ? "Đặt câu hỏi về quy trình, chính sách và kiến thức doanh nghiệp."
                 : "Trợ lý AI đa năng. Hỏi tôi bất cứ điều gì."}
             </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2 max-w-md">
+              {chatMode === "rag" ? (
+                <>
+                  {["Chính sách bảo mật thông tin?", "Quy trình phê duyệt hợp đồng?", "Điều khoản hợp đồng mẫu?"].map((q) => (
+                    <button key={q} className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all duration-150">
+                      {q}
+                    </button>
+                  ))}
+                </>
+              ) : (
+                <>
+                  {["Tóm tắt tài liệu", "Phân tích dữ liệu", "Soạn thảo văn bản"].map((q) => (
+                    <button key={q} className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all duration-150">
+                      {q}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
         ) : (
           <ScrollArea className="flex-1">
@@ -354,6 +406,11 @@ export default function ChatPage() {
                     onFeedback={(messageId, helpful) =>
                       console.log("Feedback:", { messageId, helpful })
                     }
+                    onCitationHover={setHoveredCitationId}
+                    onCitationClick={(citations, citationId) => {
+                      handleCitationClick(citations, citationId);
+                      setOpenSourcesQuery(userQuery);
+                    }}
                   />
                 );
               })}
@@ -388,6 +445,7 @@ export default function ChatPage() {
           token={token}
           query={openSourcesQuery}
           onAttachFile={(text, name) => setPendingAttach({ text, name })}
+          hoveredCitationId={hoveredCitationId}
         />
       )}
     </div>

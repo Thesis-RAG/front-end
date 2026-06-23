@@ -16,6 +16,7 @@ interface SourcesPanelProps {
   /** Called when user clicks "+" to add a source to context (future feature) */
   onAddToContext?: (citation: Citation) => void;
   onAttachFile?: (text: string, fileName: string) => void;
+  hoveredCitationId?: string | null;
 }
 
 function isGmailSource(citation: Citation) {
@@ -205,6 +206,7 @@ export function SourcesPanel({
   query = "",
   onAddToContext,
   onAttachFile,
+  hoveredCitationId,
 }: SourcesPanelProps) {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -267,13 +269,16 @@ export function SourcesPanel({
   };
 
   return (
-    <div className="flex h-full w-[380px] min-w-0 max-w-full flex-col border-l border-border bg-card animate-slide-in-right overflow-hidden">
+    <div className="flex h-full w-[380px] min-w-0 max-w-full flex-col border-l border-border bg-card animate-slide-in-right overflow-hidden shadow-card-lg">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-gradient-to-r from-primary/5 to-transparent shrink-0">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm">Nguồn tham chiếu</span>
+          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
+            <Eye className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <span className="font-semibold text-sm text-foreground">Nguồn tham chiếu</span>
           {filteredCitations.length > 0 && (
-            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full">
+            <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
               {filteredCitations.length}
             </span>
           )}
@@ -281,24 +286,28 @@ export function SourcesPanel({
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8"
+          className="h-7 w-7 rounded-full hover:bg-muted"
           onClick={onClose}
         >
-          <X className="h-4 w-4" />
+          <X className="h-3.5 w-3.5" />
         </Button>
       </div>
 
       <ScrollArea className="flex-1 w-full">
-        <div className="p-3 space-y-1 w-full" style={{ maxWidth: "380px" }}>
-          <p className="px-1 pb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-            Từ dữ liệu công ty
+        <div className="p-3 space-y-2 w-full" style={{ maxWidth: "380px" }}>
+          <p className="px-1 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+            Từ kho dữ liệu công ty
           </p>
 
           {filteredCitations.length === 0 && (
-            <p className="px-1 py-4 text-xs text-muted-foreground text-center">
-              Không tìm thấy nguồn tham chiếu phù hợp với truy vấn. Hãy thử điều
-              chỉnh câu hỏi hoặc thêm nhiều chi tiết hơn để có kết quả tốt hơn.
-            </p>
+            <div className="px-2 py-8 text-center">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                <FileText className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Không tìm thấy nguồn phù hợp. Hãy thử điều chỉnh câu hỏi để có kết quả tốt hơn.
+              </p>
+            </div>
           )}
 
           {filteredCitations.map((citation) => {
@@ -319,8 +328,10 @@ export function SourcesPanel({
               <div
                 key={citation.id}
                 className={cn(
-                  "group rounded-lg border border-border bg-background transition-colors overflow-hidden",
-                  isExpanded && "border-primary/30",
+                  "group rounded-xl border border-border bg-card shadow-card transition-all duration-150 overflow-hidden hover:shadow-card-md hover:border-border",
+                  isExpanded && "border-primary/30 shadow-card-md",
+                  hoveredCitationId === citation.id &&
+                    "bg-primary/5 border-primary/40 shadow-card-md ring-1 ring-primary/20",
                 )}
               >
                 {/* Card header row */}
@@ -332,30 +343,33 @@ export function SourcesPanel({
                   <div className="flex items-center mb-2 w-full">
                     <div
                       className={cn(
-                        "flex h-7 w-7 shrink-0 items-center justify-center rounded",
+                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
                         isGmailSource(citation)
-                          ? "bg-red-50 dark:bg-red-950/30"
-                          : "bg-blue-50 dark:bg-blue-950/30",
+                          ? "bg-red-100"
+                          : "bg-blue-100",
                       )}
                     >
                       <Icon
                         className={cn(
                           "h-3.5 w-3.5",
                           isGmailSource(citation)
-                            ? "text-red-500"
-                            : "text-blue-600 dark:text-blue-400",
+                            ? "text-red-600"
+                            : "text-blue-700",
                         )}
                       />
                     </div>
-                    <div className="flex items-center gap-1.5 ml-2 min-w-0 overflow-hidden">
-                      <span className="text-[11px] text-muted-foreground truncate">
+                    <div className="flex items-center gap-1.5 ml-2 min-w-0 overflow-hidden flex-1">
+                      <span className="text-[11px] text-muted-foreground truncate font-medium">
                         {typeLabel}
                       </span>
 
                       {pct !== null && (
                         <>
                           <span className="text-muted-foreground/40">·</span>
-                          <span className="text-[11px] text-muted-foreground">
+                          <span className={cn(
+                            "text-[11px] font-semibold",
+                            pct >= 70 ? "text-green-600" : pct >= 40 ? "text-amber-600" : "text-muted-foreground",
+                          )}>
                             {pct}%
                           </span>
                         </>
@@ -371,19 +385,19 @@ export function SourcesPanel({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10 hover:text-primary"
                           disabled={openingId === citation.id}
                           onClick={() => handleOpenFile(citation)}
                           title="Mở tài liệu"
                         >
-                          <Eye className="h-3.5 w-3.5" />
+                          <Eye className="h-3 w-3" />
                         </Button>
                       )}
                       {!isGmailSource(citation) && (
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="h-6 w-6 rounded-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-primary/10 hover:text-primary"
                           onClick={() => handleAddToContext(citation)}
                           disabled={attachingId !== null}
                           title="Thêm vào ngữ cảnh"
@@ -391,7 +405,7 @@ export function SourcesPanel({
                           {attachingId === citation.id ? (
                             <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                           ) : (
-                            <Plus className="h-3.5 w-3.5" />
+                            <Plus className="h-3 w-3" />
                           )}
                         </Button>
                       )}
@@ -399,8 +413,8 @@ export function SourcesPanel({
                   </div>
 
                   {/* ROW 2: Title */}
-                  <div className="flex items-center gap-2.5 mb-1.5 min-w-0">
-                    <p className="text-sm font-semibold leading-snug truncate flex-1 max-w-full">
+                  <div className="mb-1.5 min-w-0">
+                    <p className="text-sm font-semibold leading-snug truncate">
                       <HighlightedExcerpt
                         text={(citation.documentTitle ?? "").slice(0, 60)}
                         keywords={keywords}
@@ -410,7 +424,7 @@ export function SourcesPanel({
 
                   {/* ROW 3: Excerpt snippet with keyword highlight */}
                   {displayExcerpt && (
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed overflow-hidden break-all">
+                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed overflow-hidden break-words">
                       <HighlightedExcerpt
                         text={displayExcerpt}
                         keywords={keywords}
@@ -421,14 +435,14 @@ export function SourcesPanel({
 
                 {/* Expanded: full excerpt */}
                 {isExpanded && (
-                  <div className="border-t border-border px-3 pb-3 pt-2 space-y-2 animate-fade-in">
+                  <div className="border-t border-border/60 bg-muted/30 px-3 pb-3 pt-2.5 space-y-2.5 animate-fade-in">
                     {citation.sectionPath && (
-                      <p className="text-xs text-muted-foreground italic">
+                      <p className="text-[11px] text-muted-foreground italic font-medium">
                         {citation.sectionPath}
                       </p>
                     )}
                     {citation.excerpt && (
-                      <div className="rounded-md bg-muted/60 p-2.5 text-xs leading-relaxed text-foreground overflow-hidden break-all w-full">
+                      <div className="rounded-lg bg-background border border-border/60 p-2.5 text-xs leading-relaxed text-foreground overflow-hidden break-words">
                         <HighlightedExcerpt
                           text={citation.excerpt}
                           keywords={keywords}
@@ -436,17 +450,23 @@ export function SourcesPanel({
                       </div>
                     )}
                     {pct !== null && (
-                      <div className="flex items-center gap-2 pt-1">
-                        <span className="text-xs text-muted-foreground">
-                          Độ tương đồng:
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-muted-foreground font-medium whitespace-nowrap">
+                          Độ tương đồng
                         </span>
                         <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-primary rounded-full transition-all"
+                            className={cn(
+                              "h-full rounded-full transition-all duration-500",
+                              pct >= 70 ? "bg-green-500" : pct >= 40 ? "bg-amber-500" : "bg-primary",
+                            )}
                             style={{ width: `${pct}%` }}
                           />
                         </div>
-                        <span className="text-xs font-medium">{pct}%</span>
+                        <span className={cn(
+                          "text-[11px] font-bold",
+                          pct >= 70 ? "text-green-600" : pct >= 40 ? "text-amber-600" : "text-primary",
+                        )}>{pct}%</span>
                       </div>
                     )}
                   </div>
@@ -454,14 +474,6 @@ export function SourcesPanel({
               </div>
             );
           })}
-
-          {citations.some((c) => c.documentId) && (
-            <>
-              <p className="px-1 pt-4 pb-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                {/* Other sources */}
-              </p>
-            </>
-          )}
         </div>
       </ScrollArea>
     </div>

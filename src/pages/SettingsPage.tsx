@@ -31,9 +31,52 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { extractFolderId, listDriveFiles } from "@/services/drive.api";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { ENV } from "@/config/env";
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { token } = useAuth();
+
+  // ── RAG settings state ───────────────────────────────────────────────
+  const [topK, setTopK] = useState<number>(5);
+  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.0);
+  const [ragSaving, setRagSaving] = useState(false);
+
+  // Load RAG settings on mount
+  useState(() => {
+    if (!token) return;
+    fetch(`${ENV.API_BASE_URL}/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data["rag.top_k"] !== undefined) setTopK(Number(data["rag.top_k"]));
+        if (data["rag.similarity_threshold"] !== undefined)
+          setSimilarityThreshold(Number(data["rag.similarity_threshold"]));
+      })
+      .catch(() => {});
+  });
+
+  const handleSaveRag = async () => {
+    if (!token) return;
+    setRagSaving(true);
+    try {
+      await fetch(`${ENV.API_BASE_URL}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          "rag.top_k": topK,
+          "rag.similarity_threshold": similarityThreshold,
+        }),
+      });
+      toast({ title: "Đã lưu cấu hình RAG" });
+    } catch {
+      toast({ title: "Lỗi lưu cấu hình", variant: "destructive" });
+    } finally {
+      setRagSaving(false);
+    }
+  };
 
   // ── Drive state ──────────────────────────────────────────────────────
   const [driveFolderUrl, setDriveFolderUrl] = useState<string>(
@@ -233,7 +276,14 @@ export default function SettingsPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="topK">Số kết quả Top-K</Label>
-                  <Input id="topK" type="number" defaultValue={5} />
+                  <Input
+                    id="topK"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={topK}
+                    onChange={(e) => setTopK(Number(e.target.value))}
+                  />
                   <p className="text-xs text-muted-foreground">
                     Số lượng tài liệu được truy xuất cho mỗi câu hỏi
                   </p>
@@ -245,13 +295,23 @@ export default function SettingsPage() {
                   <Input
                     id="similarityThreshold"
                     type="number"
-                    step="0.1"
-                    defaultValue={0.7}
+                    step="0.05"
+                    min={0}
+                    max={1}
+                    value={similarityThreshold}
+                    onChange={(e) => setSimilarityThreshold(Number(e.target.value))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Điểm tương đồng tối thiểu (0.0 - 1.0)
+                    Chunk có score thấp hơn ngưỡng này sẽ bị loại (0.0 = không lọc)
                   </p>
                 </div>
+              </div>
+              <div className="flex justify-end">
+                <Button size="sm" onClick={handleSaveRag} disabled={ragSaving}>
+                  {ragSaving
+                    ? <><Save className="mr-2 h-4 w-4 animate-spin" />Đang lưu...</>
+                    : <><Save className="mr-2 h-4 w-4" />Lưu cấu hình RAG</>}
+                </Button>
               </div>
 
               <div className="space-y-2">

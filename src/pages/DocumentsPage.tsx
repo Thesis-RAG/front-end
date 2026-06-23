@@ -472,27 +472,27 @@ export default function DocumentsPage() {
 
   // ── Table ──────────────────────────────────────────────────────────────────
   const renderTable = (docs: DocumentRead[], showOwner = false) => (
-    <div className="rounded-lg border border-border bg-card">
+    <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
       <Table>
         <TableHeader>
-          <TableRow>
-            <TableHead className="w-[28%] font-bold text-foreground">
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead className="w-[28%] text-xs font-bold text-muted-foreground uppercase tracking-wide">
               Tên tài liệu
             </TableHead>
-            <TableHead className="font-bold text-foreground">Đơn vị</TableHead>
-            <TableHead className="font-bold text-foreground">Độ nhạy</TableHead>
-            <TableHead className="font-bold text-foreground">
+            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Đơn vị</TableHead>
+            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Độ nhạy</TableHead>
+            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
               Trạng thái
             </TableHead>
-            <TableHead className="font-bold text-foreground">
+            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
               Phiên bản
             </TableHead>
             {showOwner && (
-              <TableHead className="font-bold text-foreground">
+              <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
                 Người sở hữu
               </TableHead>
             )}
-            <TableHead className="font-bold text-foreground">
+            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
               Cập nhật
             </TableHead>
             <TableHead className="w-12" />
@@ -505,25 +505,30 @@ export default function DocumentsPage() {
                 colSpan={7}
                 className="h-32 text-center text-muted-foreground"
               >
-                Đang tải...
+                <div className="flex flex-col items-center gap-2">
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <span className="text-sm">Đang tải...</span>
+                </div>
               </TableCell>
             </TableRow>
           ) : docs.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7} className="h-32 text-center">
-                <div className="flex flex-col items-center text-muted-foreground">
-                  <FileText className="h-8 w-8 mb-2" />
-                  <p>Không tìm thấy tài liệu nào</p>
+                <div className="flex flex-col items-center text-muted-foreground gap-2">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+                    <FileText className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm">Không tìm thấy tài liệu nào</p>
                 </div>
               </TableCell>
             </TableRow>
           ) : (
             docs.map((doc) => (
-              <TableRow key={doc.id}>
+              <TableRow key={doc.id} className="hover:bg-muted/30 transition-colors">
                 <TableCell>
                   <button
                     onClick={() => handleView(doc)}
-                    className="font-medium text-foreground hover:text-primary transition-colors text-left line-clamp-1"
+                    className="font-semibold text-foreground hover:text-primary transition-colors text-left line-clamp-1"
                   >
                     {doc.title}
                   </button>
@@ -661,7 +666,7 @@ export default function DocumentsPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Tìm kiếm tài liệu..."
-              className="pl-9 h-9 placeholder:text-[12.5px]"
+              className="pl-9 h-9 placeholder:text-[12.5px] rounded-lg"
             />
           </div>
           <div className="h-6 w-px bg-border" />

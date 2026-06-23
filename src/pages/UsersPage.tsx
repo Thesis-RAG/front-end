@@ -1812,23 +1812,25 @@ function AddUserButton({ onCreated }: { onCreated?: () => void }) {
           </DialogHeader>
           <div className="grid gap-3 py-2">
             <div className="grid gap-1.5">
-              <Label>Họ tên</Label>
+              <Label className="text-xs text-muted-foreground">Họ tên</Label>
               <Input
                 value={form.name}
                 onChange={(e) => set("name", e.target.value)}
                 placeholder="Nguyễn Văn A"
+                className="placeholder:text-[12px]"
               />
             </div>
             <div className="grid gap-1.5">
-              <Label>Email</Label>
+              <Label className="text-xs text-muted-foreground">Email</Label>
               <Input
                 value={form.email}
                 onChange={(e) => set("email", e.target.value)}
                 placeholder="nva@company.com"
+                className="placeholder:text-[12px]"
               />
             </div>
             <div className="grid gap-1.5">
-              <Label>Mật khẩu</Label>
+              <Label className="text-xs text-muted-foreground">Mật khẩu</Label>
               <Input
                 type="password"
                 value={form.password}

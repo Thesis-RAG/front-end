@@ -15,18 +15,18 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, breadcrumbs, actions }: PageHeaderProps) {
   return (
-    <header className="border-b border-border bg-card px-6 py-4">
+    <header className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur-sm px-6 py-4 shadow-card">
       {breadcrumbs && breadcrumbs.length > 0 && (
-        <nav className="mb-2 flex items-center gap-1 text-sm text-muted-foreground">
+        <nav className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
           {breadcrumbs.map((item, index) => (
             <span key={index} className="flex items-center gap-1">
-              {index > 0 && <ChevronRight className="h-4 w-4" />}
+              {index > 0 && <ChevronRight className="h-3.5 w-3.5" />}
               {item.href ? (
                 <Link to={item.href} className="hover:text-foreground transition-colors">
                   {item.label}
                 </Link>
               ) : (
-                <span className="text-foreground">{item.label}</span>
+                <span className="text-foreground font-medium">{item.label}</span>
               )}
             </span>
           ))}
@@ -34,12 +34,12 @@ export function PageHeader({ title, description, breadcrumbs, actions }: PageHea
       )}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+          <h1 className="text-xl font-bold text-foreground tracking-tight">{title}</h1>
           {description && (
-            <p className="mt-0.5 text-[13px] text-muted-foreground">{description}</p>
+            <p className="mt-0.5 text-[13px] text-muted-foreground leading-relaxed">{description}</p>
           )}
         </div>
-        {actions && <div className="flex items-center gap-2">{actions}</div>}
+        {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
       </div>
     </header>
   );

@@ -162,69 +162,68 @@ export function ChatInput({
   const hasDriveFolder = !!localStorage.getItem("drive_folder_url");
 
   return (
-    <div className="border-t border-border bg-background p-4">
+    <div className="border-t border-border bg-background/95 backdrop-blur-sm px-4 pt-3 pb-4">
       <div className="mx-auto max-w-3xl">
-        {/* Mode toggle */}
-        {/* Mode toggle */}
-        <div className="flex items-center gap-2 mb-2">
-          <button
-            onClick={() => chatMode !== "rag" && onToggleMode()}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors border",
-              chatMode === "rag"
-                ? "bg-primary/10 text-primary border-primary/30"
-                : "bg-muted text-muted-foreground border-border hover:bg-muted/80",
-            )}
-          >
-            <BookOpen className="h-3 w-3" /> RAG SMEs
-          </button>
-          <button
-            onClick={() => chatMode !== "chatbot" && onToggleMode()}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors border",
-              chatMode === "chatbot"
-                ? "bg-primary/10 text-primary border-primary/30"
-                : "bg-muted text-muted-foreground border-border hover:bg-muted/80",
-            )}
-          >
-            <Bot className="h-3 w-3" /> Chatbot
-          </button>
+        {/* Mode & source toggle row */}
+        <div className="flex items-center gap-1.5 mb-2.5 flex-wrap">
+          <div className="flex items-center gap-0.5 bg-muted/80 rounded-full p-0.5">
+            <button
+              onClick={() => chatMode !== "rag" && onToggleMode()}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-150",
+                chatMode === "rag"
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <BookOpen className="h-3 w-3" /> RAG SMEs
+            </button>
+            <button
+              onClick={() => chatMode !== "chatbot" && onToggleMode()}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all duration-150",
+                chatMode === "chatbot"
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Bot className="h-3 w-3" /> Chatbot
+            </button>
+          </div>
 
           {/* Gmail source filter — chỉ hiện khi RAG mode */}
           {chatMode === "rag" && (
             <>
-              <div className="h-4 w-px bg-border mx-1" />
-              {(["rag", "gmail", "all"] as const).map((src) => (
-                <button
-                  key={src}
-                  onClick={() => onChangeChatSource(src)}
-                  className={cn(
-                    "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors border",
-                    chatSource === src
-                      ? "bg-primary/10 text-primary border-primary/30"
-                      : "bg-muted text-muted-foreground border-border hover:bg-muted/80",
-                  )}
-                >
-                  {src === "rag"
-                    ? "Tài liệu"
-                    : src === "gmail"
-                      ? "Gmail"
-                      : "Tất cả"}
-                </button>
-              ))}
+              <div className="h-4 w-px bg-border mx-0.5" />
+              <div className="flex items-center gap-0.5 bg-muted/80 rounded-full p-0.5">
+                {(["rag", "gmail", "all"] as const).map((src) => (
+                  <button
+                    key={src}
+                    onClick={() => onChangeChatSource(src)}
+                    className={cn(
+                      "rounded-full px-2.5 py-1.5 text-xs font-medium transition-all duration-150",
+                      chatSource === src
+                        ? "bg-white text-primary shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {src === "rag" ? "Tài liệu" : src === "gmail" ? "Gmail" : "Tất cả"}
+                  </button>
+                ))}
+              </div>
             </>
           )}
         </div>
 
         {/* Attached file badge */}
         {attachedFile && (
-          <div className="flex items-center gap-1.5 px-2 pb-1">
-            <span className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary rounded-full px-2.5 py-1 border border-primary/20">
-              <Paperclip className="h-3 w-3" />
-              {attachedFile.name}
+          <div className="flex items-center gap-1.5 px-1 pb-2">
+            <span className="flex items-center gap-1.5 text-xs bg-primary/10 text-primary rounded-full px-3 py-1.5 border border-primary/15 font-medium">
+              <Paperclip className="h-3 w-3 shrink-0" />
+              <span className="max-w-[240px] truncate">{attachedFile.name}</span>
               <button
                 onClick={() => setAttachedFile(null)}
-                className="ml-1 hover:text-destructive transition-colors"
+                className="ml-0.5 hover:text-destructive transition-colors shrink-0"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -232,7 +231,7 @@ export function ChatInput({
           </div>
         )}
 
-        <div className="relative flex items-end gap-2 rounded-lg border border-input bg-card p-2 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+        <div className="relative flex items-end gap-2 rounded-xl border-2 border-border bg-card p-2 shadow-card transition-all duration-200 focus-within:border-primary/40 focus-within:shadow-card-md">
           <textarea
             ref={textareaRef}
             value={message}
@@ -243,11 +242,11 @@ export function ChatInput({
             rows={1}
             className={cn(
               "flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-muted-foreground",
-              "max-h-[200px] min-h-[40px]",
+              "max-h-[200px] min-h-[40px] leading-relaxed",
             )}
           />
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
             {/* Hidden file input */}
             <input
               ref={fileInputRef}
@@ -261,7 +260,7 @@ export function ChatInput({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="h-9 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
               title="Đính kèm file từ máy"
             >
               <Plus className="h-4 w-4" />
@@ -272,17 +271,16 @@ export function ChatInput({
               type="button"
               onClick={() => setShowDrivePicker((v) => !v)}
               className={cn(
-                "h-9 w-9 flex items-center justify-center rounded-md transition-colors relative",
+                "h-8 w-8 flex items-center justify-center rounded-lg transition-all relative",
                 showDrivePicker
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
-              title="Choose file from Google Drive"
+              title="Chọn file từ Google Drive"
             >
               <HardDrive className="h-4 w-4" />
-              {/* Dot indicator nếu đã cấu hình folder */}
               {hasDriveFolder && !showDrivePicker && (
-                <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-green-500" />
+                <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-green-500" />
               )}
             </button>
 
@@ -292,7 +290,7 @@ export function ChatInput({
                 <button
                   onClick={() => setShowFilter((v) => !v)}
                   className={cn(
-                    "relative h-9 w-9 flex items-center justify-center rounded-md transition-colors",
+                    "relative h-8 w-8 flex items-center justify-center rounded-lg transition-all",
                     showFilter || activeFilterCount > 0
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -300,7 +298,7 @@ export function ChatInput({
                 >
                   <SlidersHorizontal className="h-4 w-4" />
                   {activeFilterCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-medium">
+                    <span className="absolute -top-1 -right-1 h-4 w-4 flex items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold">
                       {activeFilterCount}
                     </span>
                   )}
@@ -323,7 +321,7 @@ export function ChatInput({
                 variant="ghost"
                 size="icon"
                 onClick={onStop}
-                className="h-9 w-9 shrink-0"
+                className="h-8 w-8 shrink-0 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
               >
                 <Square className="h-4 w-4" />
               </Button>
@@ -333,18 +331,18 @@ export function ChatInput({
                 size="icon"
                 onClick={handleSubmit}
                 disabled={!message.trim() || disabled}
-                className="h-9 w-9 shrink-0"
+                className="h-8 w-8 shrink-0 rounded-lg shadow-sm disabled:opacity-40"
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>
         </div>
 
-        <p className="mt-2 text-center text-xs text-muted-foreground">
+        <p className="mt-2 text-center text-[11px] text-muted-foreground/70">
           {chatMode === "rag"
-            ? "Câu trả lời được tạo ra từ kho kiến ​​thức. Luôn luôn kiểm tra lại các nguồn đã trích dẫn."
-            : "Trợ lý AI đa năng. Câu trả lời dựa trên mô hình ngôn ngữ và có thể không chính xác. Luôn kiểm tra lại thông tin quan trọng."}
+            ? "Câu trả lời được tạo từ kho kiến thức. Luôn kiểm tra lại các nguồn đã trích dẫn."
+            : "Trợ lý AI đa năng. Câu trả lời dựa trên mô hình ngôn ngữ và có thể không chính xác."}
         </p>
       </div>
 

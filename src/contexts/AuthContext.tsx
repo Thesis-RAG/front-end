@@ -89,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         case "audit.view":
           return isCorpMember;
         case "settings":
+        case "policy.manage":
           return isCorpMember;
         case "documents.confidential":
           return maxClearance >= 3;
