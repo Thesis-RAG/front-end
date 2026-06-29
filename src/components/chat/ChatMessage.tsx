@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { visit } from "unist-util-visit";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ThumbsUp,
   ThumbsDown,
@@ -10,6 +11,7 @@ import {
   ChevronUp,
   BookOpen,
   Paperclip,
+  ShieldAlert,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChatMessage as ChatMessageType, Citation } from "@/types";
@@ -178,45 +180,74 @@ export function ChatMessage({
             </div>
           ) : isUser ? (
             <span className="whitespace-pre-wrap text-sm leading-relaxed">{message.content}</span>
-          ) : (
-            <div
-              className={cn(
-                "prose prose-sm max-w-none",
-                "prose-p:my-0 prose-p:leading-normal",
-                "prose-ul:my-1 prose-ul:pl-4",
-                "prose-ol:my-1 prose-ol:pl-4",
-                "prose-li:my-0 prose-li:leading-normal",
-                "prose-strong:font-semibold",
-                "prose-headings:font-semibold prose-headings:my-1",
-                "prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-code:text-sm",
-                "prose-pre:bg-muted prose-pre:p-3 prose-pre:rounded-lg",
-                "[&_p+ul]:mt-1 [&_p+ol]:mt-1 [&_li>p]:my-0",
-              )}
-            >
-              <ReactMarkdown
-                remarkPlugins={[remarkCitations]}
-                components={
-                  {
-                    citation: ({ num }: any) => (
-                      <CitationBadge
-                        num={num}
-                        citation={message.citations?.[parseInt(num, 10) - 1]}
-                        onHover={onCitationHover}
-                        onClick={(citation) =>
-                          onCitationClick?.(message.citations!, citation.id)
-                        }
-                      />
-                    ),
-                  } as any
-                }
+          ) : (() => {
+            const WATERMARK_MARKER = "\n\n---\n⚠️";
+            const wmIdx = message.content.indexOf(WATERMARK_MARKER);
+            const mainContent = wmIdx >= 0 ? message.content.slice(0, wmIdx) : message.content;
+            const hasWatermarkBanner = wmIdx >= 0;
+            return (
+              <div
+                className={cn(
+                  "prose prose-sm max-w-none",
+                  "prose-p:my-0 prose-p:leading-normal",
+                  "prose-ul:my-1 prose-ul:pl-4",
+                  "prose-ol:my-1 prose-ol:pl-4",
+                  "prose-li:my-0 prose-li:leading-normal",
+                  "prose-strong:font-semibold",
+                  "prose-headings:font-semibold prose-headings:my-1",
+                  "prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-code:text-sm",
+                  "prose-pre:bg-muted prose-pre:p-3 prose-pre:rounded-lg",
+                  "[&_p+ul]:mt-1 [&_p+ol]:mt-1 [&_li>p]:my-0",
+                )}
               >
-                {message.content}
-              </ReactMarkdown>
-              {message.isStreaming && (
-                <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary" />
-              )}
-            </div>
-          )}
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkCitations]}
+                  components={
+                    {
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto my-2">
+                          <table className="min-w-full border-collapse text-sm">{children}</table>
+                        </div>
+                      ),
+                      thead: ({ children }) => (
+                        <thead className="bg-muted/60">{children}</thead>
+                      ),
+                      th: ({ children }) => (
+                        <th className="border border-border px-3 py-1.5 text-left font-semibold">{children}</th>
+                      ),
+                      td: ({ children }) => (
+                        <td className="border border-border px-3 py-1.5 align-top">{children}</td>
+                      ),
+                      citation: ({ num }: any) => (
+                        <CitationBadge
+                          num={num}
+                          citation={message.citations?.[parseInt(num, 10) - 1]}
+                          onHover={onCitationHover}
+                          onClick={(citation) =>
+                            onCitationClick?.(message.citations!, citation.id)
+                          }
+                        />
+                      ),
+                    } as any
+                  }
+                >
+                  {mainContent}
+                </ReactMarkdown>
+                {hasWatermarkBanner && (
+                  <div className="not-prose mt-3 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+                    <ShieldAlert className="shrink-0 h-4 w-4 text-amber-500 mt-0.5" />
+                    <p className="text-xs text-amber-800 leading-relaxed m-0">
+                      Nội dung này được truy cập theo điều kiện kiểm soát phân quyền.{" "}
+                      <span className="font-medium">Hoạt động truy vấn đã được ghi nhận.</span>
+                    </p>
+                  </div>
+                )}
+                {message.isStreaming && (
+                  <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary" />
+                )}
+              </div>
+            );
+          })()}
         </div>
 
         {/* ── Bottom action row ── */}

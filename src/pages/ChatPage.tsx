@@ -43,14 +43,14 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<ChatMessageType[]>([]);
   const [openSources, setOpenSources] = useState<Citation[] | null>(null);
   const [openSourcesQuery, setOpenSourcesQuery] = useState<string>("");
-  const [hoveredCitationId, setHoveredCitationId] = useState<string | null>(
-    null,
-  );
+  const [hoveredCitationId, setHoveredCitationId] = useState<string | null>(null);
+  const [focusCitationId, setFocusCitationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const handleCitationClick = (citations: Citation[], citationId: string) => {
     setOpenSources(citations);
     setHoveredCitationId(citationId);
+    setFocusCitationId(citationId); // triggers auto-expand in panel
   };
 
   const handleToggleOui = (id: string) => {
@@ -335,6 +335,25 @@ export default function ChatPage() {
         onDeleteConversation={handleDeleteConversation}
       />
       <div className="flex flex-1 flex-col min-w-0">
+        {/* Header bar */}
+        <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border/60 bg-background/95 backdrop-blur-sm shrink-0">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-sm font-semibold text-foreground truncate">
+              {conversations.find((c) => c.id === activeConversationId)?.title ??
+                (chatMode === "rag" ? "Trợ lý RAG SMEs" : "Trợ lý AI")}
+            </h1>
+          </div>
+          <div className={cn(
+            "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium shrink-0",
+            chatMode === "rag"
+              ? "bg-primary/10 text-primary"
+              : "bg-teal-500/10 text-teal-600",
+          )}>
+            {chatMode === "rag" ? <BookOpen className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
+            {chatMode === "rag" ? "RAG SMEs" : "Chatbot"}
+          </div>
+        </div>
+
         {messages.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center p-8 select-none">
             <div className="relative mb-6">
@@ -366,7 +385,11 @@ export default function ChatPage() {
               {chatMode === "rag" ? (
                 <>
                   {["Chính sách bảo mật thông tin?", "Quy trình phê duyệt hợp đồng?", "Điều khoản hợp đồng mẫu?"].map((q) => (
-                    <button key={q} className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all duration-150">
+                    <button
+                      key={q}
+                      onClick={() => handleSendMessage(q)}
+                      className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all duration-150"
+                    >
                       {q}
                     </button>
                   ))}
@@ -374,7 +397,11 @@ export default function ChatPage() {
               ) : (
                 <>
                   {["Tóm tắt tài liệu", "Phân tích dữ liệu", "Soạn thảo văn bản"].map((q) => (
-                    <button key={q} className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all duration-150">
+                    <button
+                      key={q}
+                      onClick={() => handleSendMessage(q)}
+                      className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all duration-150"
+                    >
                       {q}
                     </button>
                   ))}
@@ -384,7 +411,7 @@ export default function ChatPage() {
           </div>
         ) : (
           <ScrollArea className="flex-1">
-            <div className="mx-auto max-w-3xl">
+            <div className="mx-auto max-w-3xl pt-2">
               {messages.map((message, idx) => {
                 const userQuery =
                   message.role === "assistant" &&
@@ -402,6 +429,7 @@ export default function ChatPage() {
                         prev === citations ? null : citations,
                       );
                       setOpenSourcesQuery(userQuery);
+                      setFocusCitationId(null); // Nguồn button: no auto-expand
                     }}
                     onFeedback={(messageId, helpful) =>
                       console.log("Feedback:", { messageId, helpful })
@@ -446,6 +474,7 @@ export default function ChatPage() {
           query={openSourcesQuery}
           onAttachFile={(text, name) => setPendingAttach({ text, name })}
           hoveredCitationId={hoveredCitationId}
+          focusCitationId={focusCitationId}
         />
       )}
     </div>

@@ -35,7 +35,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -66,7 +68,6 @@ import type {
   RuleConditions,
   RuleContract,
 } from "@/types/policy";
-import { ACTION_COLOR, ACTION_LABEL, RISK_COLOR } from "@/types/policy";
 import {
   fetchDomains,
   fetchDomain,
@@ -107,19 +108,20 @@ async function translateViToEn(text: string): Promise<string> {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const INTENT_OPTIONS = [
+const DEFAULT_INTENT_OPTIONS = [
   "lookup",
   "aggregate",
   "export",
   "compare",
   "summarize",
 ];
-const INTENT_RISK_OPTIONS = [
-  "normal",
-  "cross_dept",
-  "bulk_extraction",
-  "suspicious",
-];
+const INTENT_LABEL: Record<string, string> = {
+  lookup: "Tra cứu",
+  aggregate: "Tổng hợp",
+  export: "Xuất dữ liệu",
+  compare: "So sánh",
+  summarize: "Tóm tắt",
+};
 const SENSITIVITY_OPTIONS = [
   "Public",
   "Internal",
@@ -127,23 +129,81 @@ const SENSITIVITY_OPTIONS = [
   "Restricted",
   "TopSecret",
 ];
+const SENSITIVITY_VI: Record<string, string> = {
+  Public: "Công khai",
+  Internal: "Nội bộ",
+  Confidential: "Bảo mật",
+  Restricted: "Hạn chế",
+  TopSecret: "Tuyệt mật",
+};
+// Cấp độ clearance của user — tương ứng 1:1 với sensitivity
+const USER_LEVEL_OPTIONS = [
+  { value: 1, label: "Cấp 1 - Công khai" },
+  { value: 2, label: "Cấp 2 - Nội bộ" },
+  { value: 3, label: "Cấp 3 - Bảo mật" },
+  { value: 4, label: "Cấp 4 - Hạn chế" },
+  { value: 5, label: "Cấp 5 - Tuyệt mật" },
+];
+
+// 4 hành động chính thức: block | conditional | watermark | allow
+const VIOLATION_ACTION_GROUPS = [
+  {
+    label: "Từ chối",
+    options: [{ value: "block", label: "Chặn hoàn toàn" }],
+  },
+  {
+    label: "Biến đổi / Lọc nội dung",
+    options: [{ value: "conditional", label: "Áp dụng điều kiện" }],
+  },
+  {
+    label: "Cho phép có kiểm soát",
+    options: [{ value: "watermark", label: "Cho phép với watermark" }],
+  },
+  {
+    label: "Cho phép",
+    options: [{ value: "allow", label: "Cho phép tất cả" }],
+  },
+];
+const VIOLATION_ACTION_OPTIONS = VIOLATION_ACTION_GROUPS.flatMap(
+  (g) => g.options,
+);
+const VIOLATION_ACTION_COLOR: Record<string, string> = {
+  block: "bg-red-100 text-red-700",
+  conditional: "bg-purple-100 text-purple-700",
+  watermark: "bg-blue-100 text-blue-700",
+  allow: "bg-green-100 text-green-700",
+  // backward compat display
+  mask: "bg-yellow-100 text-yellow-700",
+  generalize: "bg-orange-100 text-orange-700",
+};
+// Chế độ biến đổi nội dung — chỉ dùng khi violation_action = "conditional"
+const MAX_DETAIL_OPTIONS = [
+  { value: "redact",     label: "Che thông tin nhạy cảm " },
+  { value: "anonymize",  label: "Ẩn danh hóa " },
+  { value: "generalize", label: "Khái quát hóa " },
+  { value: "summarize",  label: "Tóm tắt " },
+];
+const NUMERIC_OPTIONS = [
+  { value: "hidden",     label: "Ẩn số liệu" },
+  { value: "aggregated", label: "Số liệu tổng hợp" },
+  { value: "range_only", label: "Số liệu dạng khoảng" },
+  { value: "exact",      label: "Chi tiết đầy đủ" },
+];
 
 const DEFAULT_CONDITIONS: RuleConditions = {
   min_sensitivity: null,
   applicable_roles: [],
   blocked_roles: [],
   cross_dept_only: false,
-  require_pii_detected: false,
   applicable_intents: [],
   min_user_level: null,
-  require_intent_risk: null,
 };
 
 const DEFAULT_CONTRACT: RuleContract = {
-  max_detail: "department",
+  violation_action: "conditional",
+  max_detail: "generalize",
   numeric_granularity: "aggregated",
   allowed_entities: [],
-  violation_action: "mask",
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -163,24 +223,30 @@ function arrayToCsv(arr: string[]): string {
 type RuleFormState = {
   rule_code: string;
   name: string;
-  action: DomainRule["action"];
   priority: number;
   mandatory: boolean;
-  risk_level: DomainRule["risk_level"];
   audit_log: boolean;
   conditions: RuleConditions;
   contract: RuleContract;
 };
+
+const VALID_MAX_DETAIL = ["redact", "anonymize", "generalize", "summarize"];
+
+function normalizeContract(raw: Partial<RuleContract>): RuleContract {
+  const merged = { ...DEFAULT_CONTRACT, ...raw };
+  if (merged.violation_action === "conditional" && !VALID_MAX_DETAIL.includes(merged.max_detail)) {
+    merged.max_detail = "generalize";
+  }
+  return merged;
+}
 
 function initialFormFromRule(initial?: DomainRule | null): RuleFormState {
   if (!initial) {
     return {
       rule_code: "",
       name: "",
-      action: "ALLOW",
       priority: 50,
       mandatory: false,
-      risk_level: "low",
       audit_log: true,
       conditions: { ...DEFAULT_CONDITIONS },
       contract: { ...DEFAULT_CONTRACT },
@@ -189,13 +255,11 @@ function initialFormFromRule(initial?: DomainRule | null): RuleFormState {
   return {
     rule_code: initial.rule_code,
     name: initial.name,
-    action: initial.action,
     priority: initial.priority,
     mandatory: initial.mandatory,
-    risk_level: initial.risk_level,
     audit_log: initial.audit_log,
     conditions: { ...DEFAULT_CONDITIONS, ...initial.conditions_json },
-    contract: { ...DEFAULT_CONTRACT, ...initial.contract_json },
+    contract: normalizeContract(initial.contract_json),
   };
 }
 
@@ -214,6 +278,20 @@ function RuleFormFields({
   lockCode,
   domainEntityTypes = [],
 }: RuleFormFieldsProps) {
+  const [customIntentInput, setCustomIntentInput] = useState("");
+  // combobox mode: true = tự nhập thủ công, false = chọn từ danh sách
+  const [customViolation, setCustomViolation] = useState(
+    !VIOLATION_ACTION_OPTIONS.some(
+      (o) => o.value === form.contract.violation_action,
+    ),
+  );
+  const [customMaxDetail, setCustomMaxDetail] = useState(
+    !MAX_DETAIL_OPTIONS.some((o) => o.value === form.contract.max_detail),
+  );
+  const [customNumeric, setCustomNumeric] = useState(
+    !NUMERIC_OPTIONS.some((o) => o.value === form.contract.numeric_granularity),
+  );
+
   const setCondition = <K extends keyof RuleConditions>(
     key: K,
     value: RuleConditions[K],
@@ -227,12 +305,27 @@ function RuleFormFields({
 
   const entityLabels = domainEntityTypes.map((e) => e.entity_type);
 
+  // Tất cả intents hiện có (mặc định + tuỳ chỉnh đã được thêm)
+  const allIntents = Array.from(
+    new Set([...DEFAULT_INTENT_OPTIONS, ...form.conditions.applicable_intents]),
+  );
+
+  function addCustomIntent() {
+    const val = customIntentInput.trim();
+    if (!val || form.conditions.applicable_intents.includes(val)) return;
+    setCondition("applicable_intents", [
+      ...form.conditions.applicable_intents,
+      val,
+    ]);
+    setCustomIntentInput("");
+  }
+
   return (
     <div className="grid gap-4 py-2">
-      {/* Basic info */}
+      {/* ── Thông tin cơ bản ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4">
         <div className="grid gap-2">
-          <Label className="text-xs text-muted-foreground">Mã *</Label>
+          <Label className="text-xs text-muted-foreground">Mã quy tắc *</Label>
           <Input
             placeholder="VD: HR-01-R001"
             value={form.rule_code}
@@ -244,9 +337,9 @@ function RuleFormFields({
           />
         </div>
         <div className="grid gap-2">
-          <Label className="text-xs text-muted-foreground">Tên *</Label>
+          <Label className="text-xs text-muted-foreground">Tên quy tắc *</Label>
           <Input
-            placeholder="Tên mô tả rule"
+            placeholder="Mô tả ngắn gọn quy tắc này"
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
             className="placeholder:text-[12px] !text-[12px]"
@@ -254,30 +347,8 @@ function RuleFormFields({
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
-        <div className="grid gap-2">
-          <Label className="text-xs text-muted-foreground">Hành động</Label>
-          <Select
-            value={form.action}
-            onValueChange={(v) =>
-              setForm((f) => ({ ...f, action: v as DomainRule["action"] }))
-            }
-          >
-            <SelectTrigger className="text-[12px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(
-                ["ALLOW", "DENY", "REDACT", "ALLOW_WITH_WATERMARK"] as const
-              ).map((a) => (
-                <SelectItem key={a} value={a} className="text-[12px]">
-                  {ACTION_LABEL[a]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="grid gap-2">
+      <div className="flex gap-4 items-end">
+        <div className="grid gap-2 w-32">
           <Label className="text-xs text-muted-foreground">
             Độ ưu tiên (0–100)
           </Label>
@@ -289,64 +360,38 @@ function RuleFormFields({
             onChange={(e) =>
               setForm((f) => ({ ...f, priority: Number(e.target.value) }))
             }
-            className="text-[12px]"
+            className="!text-[12px]"
           />
         </div>
-        <div className="grid gap-2">
-          <Label className="text-xs text-muted-foreground">Mức rủi ro</Label>
-          <Select
-            value={form.risk_level}
-            onValueChange={(v) =>
-              setForm((f) => ({
-                ...f,
-                risk_level: v as DomainRule["risk_level"],
-              }))
-            }
-          >
-            <SelectTrigger className="text-[12px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(["low", "medium", "high", "very_high"] as const).map((r) => (
-                <SelectItem key={r} value={r} className="text-[12px]">
-                  {r}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex gap-6 items-end">
+        <div className="flex gap-4 items-center pb-1">
           <div className="flex items-center gap-2">
             <Switch
               checked={form.mandatory}
               onCheckedChange={(v) => setForm((f) => ({ ...f, mandatory: v }))}
             />
-            <Label className="text-xs text-muted-foreground">
-              Bắt buộc 
-            </Label>
+            <Label className="text-xs text-muted-foreground">Bắt buộc</Label>
           </div>
           <div className="flex items-center gap-2">
             <Switch
               checked={form.audit_log}
               onCheckedChange={(v) => setForm((f) => ({ ...f, audit_log: v }))}
             />
-            <Label className="text-xs text-muted-foreground">
-              Ghi truy vết
-            </Label>
+            <Label className="text-xs text-muted-foreground">Ghi log</Label>
           </div>
         </div>
       </div>
 
-      {/* Conditions */}
+      {/* ── Điều kiện kích hoạt ──────────────────────────────────────────── */}
       <div className="rounded-md border p-4 grid gap-4 bg-muted/40">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
           Điều kiện kích hoạt
         </p>
 
+        {/* Độ nhạy + Level user */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label className="text-xs text-muted-foreground">
-              Độ nhạy tối thiểu
+              Độ nhạy tài liệu tối thiểu
             </Label>
             <Select
               value={form.conditions.min_sensitivity ?? "none"}
@@ -363,32 +408,28 @@ function RuleFormFields({
                 </SelectItem>
                 {SENSITIVITY_OPTIONS.map((s) => (
                   <SelectItem key={s} value={s} className="text-[12px]">
-                    {s}
+                    {SENSITIVITY_VI[s]}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-2">
-            <Label className="text-xs text-muted-foreground">
-              Intent risk signal
-            </Label>
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Cấp độ tối thiểu của người dùng</Label>
             <Select
-              value={form.conditions.require_intent_risk ?? "none"}
+              value={form.conditions.min_user_level?.toString() ?? "none"}
               onValueChange={(v) =>
-                setCondition("require_intent_risk", v === "none" ? null : v)
+                setCondition("min_user_level", v === "none" ? null : Number(v))
               }
             >
               <SelectTrigger className="text-[12px]">
-                <SelectValue placeholder="Bất kỳ" />
+                <SelectValue placeholder="Không giới hạn" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none" className="text-[12px]">
-                  Bất kỳ
-                </SelectItem>
-                {INTENT_RISK_OPTIONS.map((r) => (
-                  <SelectItem key={r} value={r} className="text-[12px]">
-                    {r}
+                <SelectItem value="none" className="text-[12px]">Không giới hạn</SelectItem>
+                {USER_LEVEL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value.toString()} className="text-[12px]">
+                    {o.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -396,43 +437,57 @@ function RuleFormFields({
           </div>
         </div>
 
+        {/* Roles */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label className="text-xs text-muted-foreground">
-              Roles được phép (cách nhau dấu phẩy)
+              Vị trí được phép
             </Label>
             <Input
-              placeholder="Employee, Manager"
+              placeholder="VD: Admin, Director"
               value={arrayToCsv(form.conditions.applicable_roles)}
               onChange={(e) =>
                 setCondition("applicable_roles", csvToArray(e.target.value))
               }
-              className="placeholder:text-[12px] text-[12px]"
+              className="placeholder:text-[11px] text-[12px]"
             />
+            <p className="text-[10px] text-muted-foreground/70">
+              Vị trí này dù bị dính quy tắc vẫn xem được đầy đủ, không bị hạn
+              chế.
+            </p>
           </div>
-          <div className="grid gap-2">
+          <div className="grid gap-1.5">
             <Label className="text-xs text-muted-foreground">
-              Roles bị chặn (cách nhau dấu phẩy)
+              Vị trí bị chặn (bắt buộc áp dụng quy tắc)
             </Label>
             <Input
-              placeholder="Guest, Contractor"
+              placeholder="VD: Guest, Contractor"
               value={arrayToCsv(form.conditions.blocked_roles)}
               onChange={(e) =>
                 setCondition("blocked_roles", csvToArray(e.target.value))
               }
-              className="placeholder:text-[12px] text-[12px]"
+              className="placeholder:text-[11px] text-[12px]"
             />
+            <p className="text-[10px] text-muted-foreground/70">
+              Vị trí này gặp quy tắc là tự động áp dụng ngay, không xét điều
+              kiện khác.
+            </p>
           </div>
         </div>
 
-        <div className="grid gap-2">
+        {/* Intents */}
+        <div className="grid gap-1.5">
           <Label className="text-xs text-muted-foreground">
-            Intents áp dụng (bỏ trống = tất cả)
+            Loại truy vấn áp dụng{" "}
+            <span className="text-muted-foreground/60">
+              (Mặc định = Tất cả)
+            </span>
           </Label>
           <div className="flex flex-wrap gap-2">
-            {INTENT_OPTIONS.map((intent) => {
+            {allIntents.map((intent) => {
               const checked =
                 form.conditions.applicable_intents.includes(intent);
+              const isCustom = !DEFAULT_INTENT_OPTIONS.includes(intent);
               return (
                 <button
                   key={intent}
@@ -451,197 +506,322 @@ function RuleFormFields({
                       : "bg-background text-muted-foreground border-border hover:border-primary"
                   }`}
                 >
-                  {intent}
+                  {INTENT_LABEL[intent] ?? intent}
+                  {isCustom && <span className="ml-1 opacity-50">*</span>}
                 </button>
               );
             })}
           </div>
+          {/* Thêm intent tuỳ chỉnh */}
+          <div className="flex gap-2 mt-1">
+            <Input
+              placeholder="Thêm loại truy vấn tùy chỉnh..."
+              value={customIntentInput}
+              onChange={(e) => setCustomIntentInput(e.target.value)}
+              onKeyDown={(e) =>
+                e.key === "Enter" && (e.preventDefault(), addCustomIntent())
+              }
+              className="text-[12px] placeholder:text-[11px] h-8 flex-1"
+            />
+            <button
+              type="button"
+              onClick={addCustomIntent}
+              className="px-3 h-8 rounded-md border border-dashed border-primary/40 text-[11px] text-primary hover:bg-primary/5 transition-colors"
+            >
+              + Thêm
+            </button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label className="text-xs text-muted-foreground">
-              Level tối thiểu (null = không giới hạn)
-            </Label>
-            <Input
-              type="number"
-              min={1}
-              max={5}
-              placeholder="null"
-              value={form.conditions.min_user_level ?? ""}
-              onChange={(e) =>
-                setCondition(
-                  "min_user_level",
-                  e.target.value === "" ? null : Number(e.target.value),
-                )
-              }
-              className="placeholder:text-[12px] text-[12px]"
+        {/* Switches */}
+        <div className="flex gap-6 flex-wrap">
+          <div className="flex items-start gap-2">
+            <Switch
+              checked={form.conditions.cross_dept_only}
+              onCheckedChange={(v) => setCondition("cross_dept_only", v)}
+              className="mt-0.5"
             />
-          </div>
-          <div className="flex gap-6 items-end pb-1">
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={form.conditions.cross_dept_only}
-                onCheckedChange={(v) => setCondition("cross_dept_only", v)}
-              />
-              <Label className="text-xs text-muted-foreground">
-                Chỉ cross-department
+            <div>
+              <Label className="text-xs text-muted-foreground leading-tight">
+                Tài liệu ở cấp tổ chức cao hơn
               </Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={form.conditions.require_pii_detected}
-                onCheckedChange={(v) => setCondition("require_pii_detected", v)}
-              />
-              <Label className="text-xs text-muted-foreground">
-                Cần có PII
-              </Label>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                Kích hoạt khi tài liệu thuộc đơn vị lớn hơn của vị trí người dùng 
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Contract */}
+      {/* ── Policy Contract (đầu ra) ─────────────────────────────────────── */}
       <div className="rounded-md border p-4 grid gap-4 bg-muted/40">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Policy Contract (đầu ra)
+          Hợp đồng chính sách (đầu ra)
         </p>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label className="text-xs text-muted-foreground">Max detail</Label>
-            <Select
-              value={form.contract.max_detail}
-              onValueChange={(v) =>
-                setContractField("max_detail", v as RuleContract["max_detail"])
-              }
-            >
-              <SelectTrigger className="text-[12px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="company" className="text-[12px]">
-                  Company — cấp công ty
-                </SelectItem>
-                <SelectItem value="department" className="text-[12px]">
-                  Department — cấp phòng ban
-                </SelectItem>
-                <SelectItem value="project" className="text-[12px]">
-                  Project — cấp dự án
-                </SelectItem>
-                <SelectItem value="individual" className="text-[12px]">
-                  Individual — cấp cá nhân
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-2">
+        {/* Hành động vi phạm — field chính */}
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between">
             <Label className="text-xs text-muted-foreground">
-              Numeric granularity
+              Hành động khi vi phạm *
             </Label>
-            <Select
-              value={form.contract.numeric_granularity}
-              onValueChange={(v) =>
-                setContractField(
-                  "numeric_granularity",
-                  v as RuleContract["numeric_granularity"],
-                )
+            <button
+              type="button"
+              onClick={() => {
+                if (!customViolation) {
+                  setContractField("violation_action", "");
+                  setCustomViolation(true);
+                } else {
+                  setContractField("violation_action", "conditional");
+                  setCustomViolation(false);
+                }
+              }}
+              className="text-[10px] text-primary hover:underline"
+            >
+              {customViolation ? "← Chọn từ danh sách" : "Tự nhập..."}
+            </button>
+          </div>
+          {customViolation ? (
+            <Input
+              autoFocus
+              placeholder="Nhập hành động tuỳ chỉnh..."
+              value={form.contract.violation_action}
+              onChange={(e) =>
+                setContractField("violation_action", e.target.value)
               }
+              className="text-[12px] placeholder:text-[11px]"
+            />
+          ) : (
+            <Select
+              value={form.contract.violation_action}
+              onValueChange={(v) => {
+                setContractField("violation_action", v);
+                if (v === "conditional" && !VALID_MAX_DETAIL.includes(form.contract.max_detail)) {
+                  setContractField("max_detail", "generalize");
+                  setCustomMaxDetail(false);
+                }
+              }}
             >
               <SelectTrigger className="text-[12px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="hidden" className="text-[12px]">
-                  Hidden — ẩn số liệu
-                </SelectItem>
-                <SelectItem value="aggregated" className="text-[12px]">
-                  Aggregated — tổng hợp
-                </SelectItem>
-                <SelectItem value="exact" className="text-[12px]">
-                  Exact — chính xác
-                </SelectItem>
+                {VIOLATION_ACTION_GROUPS.map((g) => (
+                  <SelectGroup key={g.label}>
+                    <SelectLabel className="text-[10px] uppercase tracking-wide text-muted-foreground/60 px-2 py-1">
+                      {g.label}
+                    </SelectLabel>
+                    {g.options.map((o) => (
+                      <SelectItem
+                        key={o.value}
+                        value={o.value}
+                        className="text-[12px]"
+                      >
+                        <span
+                          className={`inline-block w-2 h-2 rounded-full mr-2 shrink-0 ${VIOLATION_ACTION_COLOR[o.value]?.split(" ")[0] ?? ""}`}
+                        />
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
               </SelectContent>
             </Select>
-          </div>
-        </div>
-
-        <div className="grid gap-2">
-          <Label className="text-xs text-muted-foreground">
-            Violation action
-          </Label>
-          <Select
-            value={form.contract.violation_action}
-            onValueChange={(v) =>
-              setContractField(
-                "violation_action",
-                v as RuleContract["violation_action"],
-              )
-            }
-          >
-            <SelectTrigger className="text-[12px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="mask" className="text-[12px]">
-                Mask — che thông tin
-              </SelectItem>
-              <SelectItem value="generalize" className="text-[12px]">
-                Generalize — khái quát hóa
-              </SelectItem>
-              <SelectItem value="deny" className="text-[12px]">
-                Deny — từ chối trả lời
-              </SelectItem>
-              <SelectItem value="regenerate" className="text-[12px]">
-                Regenerate — sinh lại câu trả lời
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="grid gap-2">
-          <Label className="text-xs text-muted-foreground">
-            Allowed entities (bỏ trống = theo domain, cách nhau dấu phẩy)
-          </Label>
-          {entityLabels.length > 0 && (
-            <div className="flex flex-wrap gap-1 mb-1">
-              {entityLabels.map((lbl) => {
-                const checked = form.contract.allowed_entities.includes(lbl);
-                return (
-                  <button
-                    key={lbl}
-                    type="button"
-                    onClick={() => {
-                      const arr = checked
-                        ? form.contract.allowed_entities.filter(
-                            (e) => e !== lbl,
-                          )
-                        : [...form.contract.allowed_entities, lbl];
-                      setContractField("allowed_entities", arr);
-                    }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-mono border transition-colors ${
-                      checked
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-background text-muted-foreground border-border hover:border-primary"
-                    }`}
-                  >
-                    {lbl}
-                  </button>
-                );
-              })}
-            </div>
           )}
-          <Input
-            placeholder="full_name, email, phone"
-            value={arrayToCsv(form.contract.allowed_entities)}
-            onChange={(e) =>
-              setContractField("allowed_entities", csvToArray(e.target.value))
-            }
-            className="placeholder:text-[12px] text-[12px]"
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Hoặc gõ trực tiếp các entity type, cách nhau dấu phẩy.
-          </p>
+        </div>
+
+        {/* Sub-options: chỉ hiển thị khi violation_action = "conditional" */}
+        {form.contract.violation_action === "conditional" && (() => {
+          const md = form.contract.max_detail;
+          // numeric_granularity chỉ có hiệu lực với anonymize / generalize
+          const numericActive = !customMaxDetail && (md === "anonymize" || md === "generalize");
+          const exactRisk = numericActive && form.contract.numeric_granularity === "exact";
+
+          return (
+            <div className="pl-3 border-l-2 border-primary/20 ml-1 grid gap-3">
+              <div className={numericActive ? "grid grid-cols-2 gap-4 items-start" : "grid gap-1.5"}>
+                {/* Cách biến đổi nội dung (max_detail) */}
+                <div className="grid gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">
+                      Mức trả lời chi tiết
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!customMaxDetail) {
+                          setContractField("max_detail", "");
+                          setCustomMaxDetail(true);
+                        } else {
+                          setContractField("max_detail", "generalize");
+                          setCustomMaxDetail(false);
+                        }
+                      }}
+                      className="text-[10px] text-primary hover:underline"
+                    >
+                      {customMaxDetail ? "← Danh sách" : "Tự nhập..."}
+                    </button>
+                  </div>
+                  {customMaxDetail ? (
+                    <Input
+                      autoFocus
+                      placeholder="Nhập chế độ tuỳ chỉnh..."
+                      value={form.contract.max_detail}
+                      onChange={(e) => setContractField("max_detail", e.target.value)}
+                      className="text-[12px] placeholder:text-[11px]"
+                    />
+                  ) : (
+                    <Select
+                      value={form.contract.max_detail}
+                      onValueChange={(v) => {
+                        setContractField("max_detail", v);
+                        // Khi chuyển sang redact/summarize, reset numeric về aggregated (safe default)
+                        if (v === "redact" || v === "summarize") {
+                          setContractField("numeric_granularity", "aggregated");
+                          setCustomNumeric(false);
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="text-[12px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MAX_DETAIL_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value} className="text-[12px]">
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                {/* Độ chính xác số liệu — chỉ hiện với anonymize/generalize */}
+                {numericActive && (
+                  <div className="grid gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground">
+                        Độ chính xác số liệu
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!customNumeric) {
+                            setContractField("numeric_granularity", "");
+                            setCustomNumeric(true);
+                          } else {
+                            setContractField("numeric_granularity", "aggregated");
+                            setCustomNumeric(false);
+                          }
+                        }}
+                        className="text-[10px] text-primary hover:underline"
+                      >
+                        {customNumeric ? "← Danh sách" : "Tự nhập..."}
+                      </button>
+                    </div>
+                    {customNumeric ? (
+                      <Input
+                        autoFocus
+                        placeholder="Nhập độ chính xác tuỳ chỉnh..."
+                        value={form.contract.numeric_granularity}
+                        onChange={(e) =>
+                          setContractField("numeric_granularity", e.target.value)
+                        }
+                        className="text-[12px] placeholder:text-[11px]"
+                      />
+                    ) : (
+                      <Select
+                        value={form.contract.numeric_granularity}
+                        onValueChange={(v) =>
+                          setContractField("numeric_granularity", v)
+                        }
+                      >
+                        <SelectTrigger className={`text-[12px] ${exactRisk ? "border-amber-400" : ""}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {NUMERIC_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value} className="text-[12px]">
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {exactRisk && (
+                      <p className="text-[10px] text-amber-600 leading-tight">
+                        Số chính xác có thể giúp tái nhận dạng danh tính nếu giá trị là duy nhất trong tập dữ liệu.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Note khi numeric bị ẩn */}
+              {!numericActive && !customMaxDetail && (
+                <p className="text-[10px] text-muted-foreground/55 italic">
+                  {md === "redact"
+                    ? "Che thông tin thay toàn bộ chunk bằng thông báo cố định — độ chính xác số liệu không có hiệu lực."
+                    : "Khái quát hóa ẩn mọi giá trị theo prompt — độ chính xác số liệu không có hiệu lực."}
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Loại thực thể được phép hiển thị */}
+        <div className="grid gap-1.5">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs text-muted-foreground">
+              Loại dữ liệu được phép hiển thị
+            </Label>
+            {form.contract.allowed_entities.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setContractField("allowed_entities", [])}
+                className="text-[10px] text-muted-foreground hover:text-destructive transition-colors"
+              >
+                Bỏ chọn tất cả
+              </button>
+            )}
+          </div>
+          {entityLabels.length > 0 ? (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                {entityLabels.map((lbl) => {
+                  const checked = form.contract.allowed_entities.includes(lbl);
+                  return (
+                    <button
+                      key={lbl}
+                      type="button"
+                      onClick={() => {
+                        const arr = checked
+                          ? form.contract.allowed_entities.filter((e) => e !== lbl)
+                          : [...form.contract.allowed_entities, lbl];
+                        setContractField("allowed_entities", arr);
+                      }}
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono border transition-colors ${
+                        checked
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground border-border hover:border-primary"
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[10px] text-muted-foreground/60">
+                {form.contract.allowed_entities.length === 0
+                  ? "Chưa chọn loại nào - câu trả lời sẽ không hiển thị thông tin thực thể cụ thể."
+                  : `Đã chọn ${form.contract.allowed_entities.length} / ${entityLabels.length} loại.`}
+              </p>
+            </>
+          ) : (
+            <p className="text-[11px] text-muted-foreground/60 italic">
+              Domain này chưa có loại thực thể nào. Thêm tại tab Miền trước.
+            </p>
+          )}
         </div>
       </div>
     </div>
@@ -700,7 +880,7 @@ function RuleDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{initial ? "Sửa rule" : "Tạo rule mới"}</DialogTitle>
+          <DialogTitle>{initial ? "Sửa luật" : "Tạo luật mới"}</DialogTitle>
           <DialogDescription className="text-[12.5px]">
             Cấu hình điều kiện kích hoạt và policy-contract đầu ra.
           </DialogDescription>
@@ -719,7 +899,7 @@ function RuleDialog({
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {initial ? "Cập nhật" : "Tạo rule"}
+            {initial ? "Cập nhật" : "Tạo luật"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -810,6 +990,7 @@ interface RulesSectionProps {
   onCreateRule: (payload: CreateRulePayload) => Promise<void>;
   onUpdateRule: (ruleId: string, payload: CreateRulePayload) => Promise<void>;
   onDeleteRule: (ruleId: string) => Promise<void>;
+  onToggleRule?: (ruleId: string, active: boolean) => Promise<void>;
   domainEntityTypes?: EntityTypeItem[];
 }
 
@@ -819,6 +1000,7 @@ function RulesSection({
   onCreateRule,
   onUpdateRule,
   onDeleteRule,
+  onToggleRule,
   domainEntityTypes = [],
 }: RulesSectionProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -868,7 +1050,7 @@ function RulesSection({
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground"></p>
         <Button size="sm" onClick={openCreate} className="gap-1.5">
-          <Plus className="h-4 w-4" /> Thêm rule
+          <Plus className="h-4 w-4" /> Thêm luật
         </Button>
       </div>
 
@@ -882,9 +1064,9 @@ function RulesSection({
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted mb-3">
             <ShieldCheck className="h-7 w-7" />
           </div>
-          <p className="font-medium text-sm">Chưa có rule nào</p>
+          <p className="font-medium text-sm">Chưa có luật nào</p>
           <p className="text-xs mt-1 text-muted-foreground/70">
-            Nhấn "Thêm rule" để tạo rule đầu tiên.
+            Nhấn "Thêm luật" để tạo luật đầu tiên.
           </p>
         </div>
       ) : (
@@ -901,14 +1083,11 @@ function RulesSection({
                 <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
                   Hành động
                 </TableHead>
-                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide w-20">
+                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide w-28">
                   Độ ưu tiên
                 </TableHead>
                 <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-                  Mức rủi ro
-                </TableHead>
-                <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-                  Contract
+                  Hợp đồng
                 </TableHead>
                 <TableHead className="w-10" />
               </TableRow>
@@ -945,11 +1124,20 @@ function RulesSection({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={`inline-flex px-2 py-[3px] rounded-md text-[11px] font-semibold ${ACTION_COLOR[rule.action]}`}
-                        >
-                          {ACTION_LABEL[rule.action]}
-                        </span>
+                        {(() => {
+                          const va =
+                            rule.contract_json?.violation_action ?? "conditional";
+                          const label =
+                            VIOLATION_ACTION_OPTIONS.find((o) => o.value === va)
+                              ?.label ?? va;
+                          return (
+                            <span
+                              className={`inline-flex px-2 py-[3px] rounded-md text-[11px] font-semibold ${VIOLATION_ACTION_COLOR[va] ?? "bg-muted text-muted-foreground"}`}
+                            >
+                              {label}
+                            </span>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm font-mono text-foreground">
@@ -957,60 +1145,73 @@ function RulesSection({
                         </span>
                       </TableCell>
                       <TableCell>
-                        <span
-                          className={`inline-flex px-2 py-[3px] rounded-md text-[11px] font-semibold ${RISK_COLOR[rule.risk_level]}`}
-                        >
-                          {rule.risk_level}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        <div className="space-y-0.5">
-                          <div>
-                            detail:{" "}
-                            <span className="font-mono text-foreground/80">
-                              {rule.contract_json?.max_detail}
-                            </span>
-                          </div>
-                          <div>
-                            number:{" "}
-                            <span className="font-mono text-foreground/80">
-                              {rule.contract_json?.numeric_granularity}
-                            </span>
-                          </div>
-                          <div>
-                            on-violation:{" "}
-                            <span className="font-mono text-foreground/80">
-                              {rule.contract_json?.violation_action}
-                            </span>
-                          </div>
+                        <div className="flex flex-col gap-1">
+                          {(() => {
+                            const va = rule.contract_json?.violation_action;
+                            if (va !== "conditional") {
+                              return <span className="text-[11px] text-muted-foreground/50">—</span>;
+                            }
+                            const detail = MAX_DETAIL_OPTIONS.find(
+                              (o) => o.value === rule.contract_json?.max_detail,
+                            )?.label ?? rule.contract_json?.max_detail ?? "—";
+                            const numeric = NUMERIC_OPTIONS.find(
+                              (o) => o.value === rule.contract_json?.numeric_granularity,
+                            )?.label ?? rule.contract_json?.numeric_granularity ?? "—";
+                            return (
+                              <>
+                                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <span className="font-medium text-foreground/70">Biến đổi</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-muted text-foreground/80 font-mono text-[10px]">
+                                    {detail}
+                                  </span>
+                                </span>
+                                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                                  <span className="font-medium text-foreground/70">Số liệu</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-muted text-foreground/80 font-mono text-[10px]">
+                                    {numeric}
+                                  </span>
+                                </span>
+                              </>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => toggleExpand(rule.id)}
-                            >
-                              <Pencil className="mr-2 h-4 w-4" /> Sửa
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => handleDelete(rule)}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" /> Xóa
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        <div className="flex items-center gap-1">
+                          {onToggleRule && (
+                            <Switch
+                              checked={rule.is_active}
+                              onCheckedChange={(v) => onToggleRule(rule.id, v)}
+                              className="scale-90"
+                              title={rule.is_active ? "Đang bật — nhấn để tắt" : "Đang tắt — nhấn để bật"}
+                            />
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => toggleExpand(rule.id)}
+                              >
+                                <Pencil className="mr-2 h-4 w-4" /> Sửa
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => handleDelete(rule)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" /> Xóa
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                     {isExpanded && (
@@ -1374,7 +1575,7 @@ export default function PolicyPage() {
     if (!token) return;
     await deleteRule(token, ruleId);
     setDomainRules((prev) => prev.filter((r) => r.id !== ruleId));
-    toast({ title: "Đã xóa rule" });
+    toast({ title: "Đã xóa luật" });
   }
 
   // ── Rule actions (global rules tab) ──────────────────────────────────────
@@ -1398,6 +1599,19 @@ export default function PolicyPage() {
     await deleteRule(token, ruleId);
     setGlobalRules((prev) => prev.filter((r) => r.id !== ruleId));
     toast({ title: "Đã xóa global rule" });
+  }
+
+  async function handleToggleDomainRule(ruleId: string, active: boolean) {
+    if (!token) return;
+    const rule = await updateRule(token, ruleId, { is_active: active });
+    setDomainRules((prev) => prev.map((r) => (r.id === ruleId ? rule : r)));
+    toast({ title: active ? "Rule đã bật" : "Rule đã tắt", description: rule.name });
+  }
+  async function handleToggleGlobalRule(ruleId: string, active: boolean) {
+    if (!token) return;
+    const rule = await updateRule(token, ruleId, { is_active: active });
+    setGlobalRules((prev) => prev.map((r) => (r.id === ruleId ? rule : r)));
+    toast({ title: active ? "Rule đã bật" : "Rule đã tắt", description: rule.name });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1749,6 +1963,7 @@ export default function PolicyPage() {
                     onCreateRule={handleCreateDomainRule}
                     onUpdateRule={handleUpdateDomainRule}
                     onDeleteRule={handleDeleteDomainRule}
+                    onToggleRule={handleToggleDomainRule}
                     domainEntityTypes={
                       selectedDomain?.id === rulesDomainId
                         ? selectedDomain.entity_types
@@ -1765,9 +1980,9 @@ export default function PolicyPage() {
             value="global-rules"
             className="flex-1 mt-0 p-6 space-y-4 overflow-auto"
           >
-            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
-              Global rules áp dụng cho <strong>tất cả</strong> domains và
-              chunks, bất kể phân loại domain.
+            <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-[12px] text-blue-700">
+              Luật toàn cục áp dụng cho <strong>tất cả</strong> miền và
+              chunks, bất kể phân loại miền.
             </div>
             <RulesSection
               rules={globalRules}
@@ -1775,6 +1990,7 @@ export default function PolicyPage() {
               onCreateRule={handleCreateGlobalRule}
               onUpdateRule={handleUpdateGlobalRule}
               onDeleteRule={handleDeleteGlobalRule}
+              onToggleRule={handleToggleGlobalRule}
             />
           </TabsContent>
         </Tabs>

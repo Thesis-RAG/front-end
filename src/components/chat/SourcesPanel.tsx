@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Eye, Plus, FileText, FileCode2, File, Mail } from "lucide-react";
 import { Citation } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ interface SourcesPanelProps {
   onAddToContext?: (citation: Citation) => void;
   onAttachFile?: (text: string, fileName: string) => void;
   hoveredCitationId?: string | null;
+  focusCitationId?: string | null;
 }
 
 function isGmailSource(citation: Citation) {
@@ -40,6 +41,7 @@ function getFileTypeLabel(citation: Citation) {
   return "Tài liệu";
 }
 
+/** Word-wrap flat text (no newlines) at ~65 chars for readable display */
 /** Vietnamese stop-words + common English stop-words to ignore */
 const STOP_WORDS = new Set([]);
 
@@ -172,7 +174,222 @@ function highlightKeywords(
   return result;
 }
 
-/** Rendered excerpt with keyword highlights */
+/** Detect Markdown table format: 2+ lines that start and end with | */
+function isMarkdownTable(text: string): boolean {
+  const pipeLines = text.split('\n').filter(l => {
+    const t = l.trim();
+    return t.startsWith('|') && t.endsWith('|');
+  });
+  return pipeLines.length >= 2;
+}
+
+/** Parse and render a Markdown table excerpt with keyword highlights */
+function MarkdownTableExcerpt({ text, keywords }: { text: string; keywords: string[] }) {
+  const parseRow = (line: string) =>
+    line.trim().split('|').slice(1, -1).map(c => c.trim());
+
+  const isSeparator = (line: string) =>
+    parseRow(line).every(c => /^[-:]+$/.test(c));
+
+  // Split lines into prose and table segments preserving order
+  const lines = text.split('\n');
+  type Seg = { type: 'prose' | 'table'; lines: string[] };
+  const segments: Seg[] = [];
+  let cur: Seg | null = null;
+
+  for (const line of lines) {
+    const t = line.trim();
+    const isRow = t.startsWith('|') && t.endsWith('|');
+    const type = isRow ? 'table' : 'prose';
+    if (!cur || cur.type !== type) {
+      if (cur) segments.push(cur);
+      cur = { type, lines: [line] };
+    } else {
+      cur.lines.push(line);
+    }
+  }
+  if (cur) segments.push(cur);
+
+  return (
+    <div className="space-y-2">
+      {segments.map((seg, si) => {
+        if (seg.type === 'prose') {
+          const prose = seg.lines.join('\n').trim();
+          if (!prose) return null;
+          return (
+            <p key={si} className="text-[11px] font-semibold text-foreground/50">
+              <HighlightedExcerpt text={prose} keywords={keywords} />
+            </p>
+          );
+        }
+
+        // Parse table: strip separator rows, split into header + data
+        const tableRows = seg.lines
+          .filter(l => { const t = l.trim(); return t.startsWith('|') && t.endsWith('|'); })
+          .filter(l => !isSeparator(l))
+          .map(parseRow);
+
+        if (tableRows.length === 0) return null;
+        const [headerRow, ...dataRows] = tableRows;
+        const ncols = Math.max(headerRow.length, ...dataRows.map(r => r.length));
+
+        if (ncols <= 2) {
+          // Key-value layout
+          return (
+            <div key={si} className="space-y-1.5">
+              {headerRow && dataRows.length > 0 && (
+                <div className="flex gap-2 text-[10px] text-muted-foreground/50 pb-0.5 border-b border-border/30 font-medium">
+                  {headerRow.map((h, i) => (
+                    <span key={i} className={i === 0 ? "shrink-0 w-[120px]" : "flex-1"}>
+                      <HighlightedExcerpt text={h} keywords={keywords} />
+                    </span>
+                  ))}
+                </div>
+              )}
+              {dataRows.map((row, ri) => (
+                <div key={ri} className="flex gap-2 text-[11.5px] leading-snug">
+                  <span className="font-semibold text-foreground/60 shrink-0 w-[120px] truncate">
+                    <HighlightedExcerpt text={row[0] ?? ''} keywords={keywords} />
+                  </span>
+                  <span className="text-foreground/90 min-w-0 break-words flex-1">
+                    <HighlightedExcerpt text={row[1] ?? ''} keywords={keywords} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          );
+        }
+
+        // Multi-column: compact HTML table
+        return (
+          <div key={si} className="overflow-x-auto">
+            <table className="w-full text-[11px] border-collapse">
+              <thead>
+                <tr className="border-b border-border/40">
+                  {headerRow.map((h, i) => (
+                    <th key={i} className="text-left pr-3 pb-1 font-semibold text-foreground/50">
+                      <HighlightedExcerpt text={h} keywords={keywords} />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {dataRows.map((row, ri) => (
+                  <tr key={ri} className="border-b border-border/20">
+                    {Array.from({ length: ncols }).map((_, ci) => (
+                      <td key={ci} className="pr-3 py-0.5 text-foreground/85">
+                        <HighlightedExcerpt text={row[ci] ?? ''} keywords={keywords} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Detect if text is table-like: many lines extracted from a table (alternating field/value) */
+function isTableLike(text: string): boolean {
+  // Don't use plain-text parser for markdown tables
+  if (isMarkdownTable(text)) return false;
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length < 4) return false;
+  // Numbered/lettered list items (e.g. "8.1.", "(a)", "a)") are NOT tables
+  const listPattern = /^\*{0,3}\d[\d.]*[.)]\s|^\*{0,3}\([a-z]\)\s|^\*{0,3}[a-z][.)]\s/i;
+  const listLines = lines.filter(l => listPattern.test(l));
+  if (listLines.length / lines.length >= 0.35) return false;
+  const shortLines = lines.filter(l => l.length < 40);
+  return shortLines.length / lines.length >= 0.4;
+}
+
+/** Renders table-like text as compact key-value rows */
+function TableExcerpt({ text, keywords }: { text: string; keywords: string[] }) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+
+  // Strip leading numbered section headings like "2. Thông tin nhân viên"
+  // These appear when the chunk includes a section title before the table rows
+  const headings: string[] = [];
+  let dataStart = 0;
+  while (dataStart < lines.length && /^\d+[.)]\s*\S/.test(lines[dataStart])) {
+    headings.push(lines[dataStart]);
+    dataStart++;
+  }
+  const dataLines = lines.slice(dataStart);
+
+  // Score alignment at offset 0 vs 1 on the remaining data lines
+  const scoreAlignment = (startIdx: number) => {
+    let score = 0;
+    for (let i = startIdx; i + 1 < dataLines.length; i += 2) {
+      if (dataLines[i].length < dataLines[i + 1].length) score += 2;
+      else if (dataLines[i].length === dataLines[i + 1].length) score += 1;
+    }
+    return score;
+  };
+
+  // After stripping headings, check if there's still an off-by-one (e.g. "Mục\nNội dung" column headers)
+  const extraHeading = dataLines.length > 2 && scoreAlignment(1) > scoreAlignment(0)
+    ? dataLines[0]
+    : null;
+  const pairStart = extraHeading !== null ? 1 : 0;
+
+  const pairs: [string, string][] = [];
+  for (let i = pairStart; i < dataLines.length; i += 2) {
+    pairs.push([dataLines[i], dataLines[i + 1] ?? '']);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {headings.map((h, idx) => (
+        <p key={`h-${idx}`} className="text-[11px] font-semibold text-foreground/50 pb-1 mb-0.5 border-b border-border/40">
+          <HighlightedExcerpt text={h} keywords={keywords} />
+        </p>
+      ))}
+      {extraHeading && (
+        <p className="text-[10px] text-muted-foreground/60 italic pb-0.5">
+          <HighlightedExcerpt text={extraHeading} keywords={keywords} />
+        </p>
+      )}
+      {pairs.map(([key, val], idx) => (
+        <div key={idx} className="flex gap-2 text-[11.5px] leading-snug">
+          <span className="font-semibold text-foreground/60 shrink-0 w-[120px] truncate">
+            <HighlightedExcerpt text={key} keywords={keywords} />
+          </span>
+          {val && (
+            <span className="text-foreground/90 min-w-0 break-words">
+              <HighlightedExcerpt text={val} keywords={keywords} />
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface MdSegment { text: string; bold: boolean; italic: boolean }
+
+/** Split a single line into bold/italic segments by parsing ***…***, **…**, *…* markers */
+function parseInlineMd(line: string): MdSegment[] {
+  const segs: MdSegment[] = [];
+  // Match ***…*** first, then **…**, then *…* — non-greedy, same line
+  const re = /(\*{3})((?:(?!\*{3}).)+?)(\*{3})|(\*{2})((?:(?!\*{2}).)+?)(\*{2})|(\*)((?:(?!\*).)+?)(\*)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line)) !== null) {
+    if (m.index > last) segs.push({ text: line.slice(last, m.index), bold: false, italic: false });
+    if (m[1])      segs.push({ text: m[2], bold: true,  italic: true  }); // ***…***
+    else if (m[4]) segs.push({ text: m[5], bold: true,  italic: false }); // **…**
+    else if (m[7]) segs.push({ text: m[8], bold: false, italic: true  }); // *…*
+    last = m.index + m[0].length;
+  }
+  if (last < line.length) segs.push({ text: line.slice(last), bold: false, italic: false });
+  return segs;
+}
+
+/** Rendered excerpt with keyword highlights, newline-to-br, and inline bold/italic markdown */
 function HighlightedExcerpt({
   text,
   keywords,
@@ -180,21 +397,34 @@ function HighlightedExcerpt({
   text: string;
   keywords: string[];
 }) {
-  const parts = highlightKeywords(text, keywords);
+  const lines = text.split('\n');
   return (
     <>
-      {parts.map((p, i) =>
-        p.highlight ? (
-          <mark
-            key={i}
-            className="bg-yellow-200 dark:bg-yellow-800/60 text-foreground rounded-[2px] px-0.5"
-          >
-            {p.text}
-          </mark>
-        ) : (
-          <span key={i}>{p.text}</span>
-        ),
-      )}
+      {lines.map((line, li) => {
+        const mdSegs = parseInlineMd(line);
+        const nodes = mdSegs.map((seg, si) => {
+          const kwParts = highlightKeywords(seg.text, keywords);
+          const inner = kwParts.map((p, pi) =>
+            p.highlight ? (
+              <mark key={pi} className="bg-yellow-200 dark:bg-yellow-800/60 text-foreground rounded-[2px] px-0.5">
+                {p.text}
+              </mark>
+            ) : (
+              <span key={pi}>{p.text}</span>
+            )
+          );
+          if (seg.bold && seg.italic) return <strong key={si}><em>{inner}</em></strong>;
+          if (seg.bold) return <strong key={si}>{inner}</strong>;
+          if (seg.italic) return <em key={si}>{inner}</em>;
+          return <span key={si}>{inner}</span>;
+        });
+        return (
+          <span key={li}>
+            {nodes}
+            {li < lines.length - 1 && <br />}
+          </span>
+        );
+      })}
     </>
   );
 }
@@ -207,10 +437,17 @@ export function SourcesPanel({
   onAddToContext,
   onAttachFile,
   hoveredCitationId,
+  focusCitationId,
 }: SourcesPanelProps) {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [attachingId, setAttachingId] = useState<string | null>(null);
+
+  // Auto-expand only when a citation badge is explicitly clicked (focusCitationId)
+  // "Nguồn" button sets focusCitationId=null → no auto-expand
+  useEffect(() => {
+    if (focusCitationId) setExpandedId(focusCitationId);
+  }, [focusCitationId]);
 
   const keywords = extractKeywords(query);
 
@@ -318,11 +555,15 @@ export function SourcesPanel({
               : null;
             const isExpanded = expandedId === citation.id;
 
-            // Get the best window of excerpt that contains a keyword
-            const displayExcerpt = getBestExcerptWindow(
-              citation.excerpt ?? "",
-              keywords,
-            );
+            // Expanded excerpt: skip leading sectionPath if it duplicates what's shown above (UI only)
+            const excerptForDisplay = (() => {
+              const exc = citation.excerpt ?? "";
+              const sp = citation.sectionPath?.trim();
+              if (sp && exc.trimStart().startsWith(sp)) {
+                return exc.trimStart().slice(sp.length).replace(/^[\s\n]+/, "");
+              }
+              return exc;
+            })();
 
             return (
               <div
@@ -412,21 +653,18 @@ export function SourcesPanel({
                     </div>
                   </div>
 
-                  {/* ROW 2: Title */}
-                  <div className="mb-1.5 min-w-0">
+                  {/* ROW 2: Title — no keyword highlight */}
+                  <div className="min-w-0">
                     <p className="text-sm font-semibold leading-snug truncate">
-                      <HighlightedExcerpt
-                        text={(citation.documentTitle ?? "").slice(0, 60)}
-                        keywords={keywords}
-                      />
+                      {(citation.documentTitle ?? "").slice(0, 80)}
                     </p>
                   </div>
 
-                  {/* ROW 3: Excerpt snippet with keyword highlight */}
-                  {displayExcerpt && (
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed overflow-hidden break-words">
+                  {/* ROW 3: Section header — visible when collapsed, with keyword highlight */}
+                  {citation.sectionPath && !isExpanded && (
+                    <p className="mt-1.5 text-xs font-medium text-foreground/70 truncate">
                       <HighlightedExcerpt
-                        text={displayExcerpt}
+                        text={citation.sectionPath}
                         keywords={keywords}
                       />
                     </p>
@@ -441,12 +679,15 @@ export function SourcesPanel({
                         {citation.sectionPath}
                       </p>
                     )}
-                    {citation.excerpt && (
-                      <div className="rounded-lg bg-background border border-border/60 p-2.5 text-xs leading-relaxed text-foreground overflow-hidden break-words">
-                        <HighlightedExcerpt
-                          text={citation.excerpt}
-                          keywords={keywords}
-                        />
+                    {excerptForDisplay && (
+                      <div className="rounded-lg bg-muted/40 border border-border/50 px-3 py-2.5 text-[11.5px] leading-relaxed text-foreground/85 break-words">
+                        {isMarkdownTable(excerptForDisplay) ? (
+                          <MarkdownTableExcerpt text={excerptForDisplay} keywords={keywords} />
+                        ) : isTableLike(excerptForDisplay) ? (
+                          <TableExcerpt text={excerptForDisplay} keywords={keywords} />
+                        ) : (
+                          <HighlightedExcerpt text={excerptForDisplay} keywords={keywords} />
+                        )}
                       </div>
                     )}
                     {pct !== null && (

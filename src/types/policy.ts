@@ -10,20 +10,18 @@ export interface EntityTypeItem {
 
 export interface RuleConditions {
   min_sensitivity: string | null;
-  applicable_roles: string[];
-  blocked_roles: string[];
-  cross_dept_only: boolean;
-  require_pii_detected: boolean;
-  applicable_intents: string[];
+  applicable_roles: string[];   // Miễn trừ: role này thì rule không áp dụng
+  blocked_roles: string[];      // Ép buộc: role này thì rule tự động áp dụng
+  cross_dept_only: boolean;     // Kích hoạt khi tài liệu ở cấp tổ chức cao hơn user
+  applicable_intents: string[]; // Bỏ trống = tất cả
   min_user_level: number | null;
-  require_intent_risk: string | null;
 }
 
 export interface RuleContract {
-  max_detail: "company" | "department" | "project" | "individual";
-  numeric_granularity: "hidden" | "aggregated" | "exact";
+  max_detail: string;            // company|department|project|individual hoặc giá trị tuỳ chỉnh
+  numeric_granularity: string;   // hidden|aggregated|exact hoặc giá trị tuỳ chỉnh
   allowed_entities: string[];
-  violation_action: "mask" | "generalize" | "deny" | "regenerate";
+  violation_action: string;      // allow|mask|watermark|block hoặc giá trị tuỳ chỉnh
 }
 
 export interface DomainRule {
@@ -31,10 +29,9 @@ export interface DomainRule {
   domain_id: string | null;
   rule_code: string;
   name: string;
-  action: "ALLOW" | "DENY" | "REDACT" | "ALLOW_WITH_WATERMARK";
+  action: string;   // derived từ violation_action, chỉ dùng nội bộ backend
   priority: number;
   mandatory: boolean;
-  risk_level: "low" | "medium" | "high" | "very_high";
   is_active: boolean;
   audit_log: boolean;
   conditions_json: RuleConditions;
@@ -92,10 +89,8 @@ export interface CreateEntityTypePayload {
 export interface CreateRulePayload {
   rule_code: string;
   name: string;
-  action: "ALLOW" | "DENY" | "REDACT" | "ALLOW_WITH_WATERMARK";
   priority: number;
   mandatory: boolean;
-  risk_level: "low" | "medium" | "high" | "very_high";
   audit_log: boolean;
   conditions: RuleConditions;
   contract: RuleContract;
@@ -111,21 +106,38 @@ export interface SuggestEntitiesResponse {
 
 // ── Display helpers ───────────────────────────────────────────────────────────
 
-export const ACTION_COLOR: Record<DomainRule["action"], string> = {
+export const VIOLATION_ACTION_COLOR: Record<string, string> = {
+  block:      "bg-red-100 text-red-700",
+  mask:       "bg-yellow-100 text-yellow-700",
+  generalize: "bg-orange-100 text-orange-700",
+  watermark:  "bg-blue-100 text-blue-700",
+  allow:      "bg-green-100 text-green-700",
+};
+
+export const VIOLATION_ACTION_LABEL: Record<string, string> = {
+  block:      "Từ chối",
+  mask:       "Che dữ liệu",
+  generalize: "Khái quát hóa",
+  watermark:  "Watermark",
+  allow:      "Cho phép",
+};
+
+// Kept for backward compat (used in some places with legacy data)
+export const ACTION_COLOR: Record<string, string> = {
   ALLOW:                "bg-green-100 text-green-700",
   DENY:                 "bg-red-100 text-red-700",
   REDACT:               "bg-yellow-100 text-yellow-700",
   ALLOW_WITH_WATERMARK: "bg-blue-100 text-blue-700",
 };
 
-export const ACTION_LABEL: Record<DomainRule["action"], string> = {
+export const ACTION_LABEL: Record<string, string> = {
   ALLOW:                "Cho phép",
   DENY:                 "Từ chối",
   REDACT:               "Che thông tin",
   ALLOW_WITH_WATERMARK: "Cho phép (Watermark)",
 };
 
-export const RISK_COLOR: Record<DomainRule["risk_level"], string> = {
+export const RISK_COLOR: Record<string, string> = {
   low:       "bg-slate-100 text-slate-600",
   medium:    "bg-yellow-100 text-yellow-700",
   high:      "bg-orange-100 text-orange-700",

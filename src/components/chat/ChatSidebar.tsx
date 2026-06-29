@@ -1,10 +1,11 @@
 import { useState } from "react";
 import {
-  Plus,
+  PenSquare,
   MessageSquare,
   MoreHorizontal,
   Pencil,
   Trash2,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Conversation } from "@/types";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ChatSidebarProps {
   conversations: Conversation[];
@@ -35,6 +38,7 @@ export function ChatSidebar({
 }: ChatSidebarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const { user } = useAuth();
 
   const handleStartEdit = (conv: Conversation) => {
     setEditingId(conv.id);
@@ -108,20 +112,42 @@ export function ChatSidebar({
     },
   );
 
+  const displayName: string =
+    (user as any)?.full_name ??
+    (user as any)?.name ??
+    (user as any)?.email ??
+    "Người dùng";
+  const initials = displayName.trim().split(/\s+/).slice(-1)[0]?.[0]?.toUpperCase() ?? "U";
+
   return (
     <div className="flex h-full w-64 flex-col border-r border-border bg-background">
-      <div className="p-3 border-b border-border/60">
+      {/* Branding header */}
+      <div className="flex items-center justify-between px-3 py-3 border-b border-border/60">
+        <div className="flex items-center gap-2">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
+            <Brain className="h-4 w-4 text-primary" />
+          </div>
+          <span className="text-sm font-semibold text-foreground tracking-tight">CorpAI</span>
+        </div>
         <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
           onClick={onNewConversation}
-          className="w-full justify-start gap-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 hover:border-primary/30 shadow-none font-medium"
-          variant="outline"
+          title="Cuộc trò chuyện mới"
         >
-          <Plus className="h-4 w-4" />
-          Cuộc trò chuyện mới
+          <PenSquare className="h-3.5 w-3.5" />
         </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-2 py-2 pb-4 scrollbar-thin">
+        {conversations.length === 0 && (
+          <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+            Chưa có cuộc trò chuyện nào.
+            <br />
+            Nhấn <span className="font-medium text-primary">+</span> để bắt đầu.
+          </p>
+        )}
         {sortedGroupEntries.map(([dateLabel, convs]) => (
           <div key={dateLabel} className="mb-4">
             <h3 className="mb-1.5 px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
@@ -190,6 +216,21 @@ export function ChatSidebar({
             </ul>
           </div>
         ))}
+      </div>
+
+      {/* User footer */}
+      <div className="border-t border-border/60 p-2">
+        <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-muted/60 transition-colors cursor-default">
+          <Avatar className="h-7 w-7 shrink-0">
+            <AvatarFallback className="text-[11px] font-bold bg-gradient-to-br from-primary to-blue-600 text-white">
+              {initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium text-foreground truncate">{displayName}</p>
+            <p className="text-[10px] text-muted-foreground">Tài khoản</p>
+          </div>
+        </div>
       </div>
     </div>
   );
