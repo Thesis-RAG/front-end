@@ -138,6 +138,7 @@ export interface Citation {
   excerpt: string;
   surroundingContext: string;
   relevance?: number;
+  docRestricted?: boolean;
 }
 
 export interface Conversation {

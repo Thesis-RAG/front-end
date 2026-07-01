@@ -155,6 +155,15 @@ export async function fetchPendingApprovals(token: string) {
   );
 }
 
+export async function getPendingReviewCount(token: string): Promise<number> {
+  const res = await fetch(`${ENV.API_BASE_URL}/documents/pending-review-count`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return 0;
+  const data = await res.json();
+  return data.count ?? 0;
+}
+
 export async function submitForReview(documentId: string, token: string) {
   const res = await fetch(
     `${ENV.API_BASE_URL}/documents/${documentId}/submit-review`,
@@ -176,6 +185,121 @@ export async function deleteDocument(documentId: string, token: string) {
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
   }
+  return res.json();
+}
+
+// ── Access Request APIs ────────────────────────────────────────────────────
+
+export type DocumentAccessStatus = {
+  has_restricted_chunks: boolean;
+  access_request_status: "pending" | "approved" | "rejected" | null;
+  approved_until: string | null;
+};
+
+export type AccessRequestRead = {
+  id: string;
+  document_id: string;
+  document_title: string | null;
+  user_id: string;
+  requester_name: string | null;
+  status: "pending" | "approved" | "rejected";
+  expires_at: string | null;
+  admin_id: string | null;
+  admin_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+export async function getDocumentAccessStatus(
+  documentId: string,
+  token: string,
+): Promise<DocumentAccessStatus> {
+  const res = await fetch(
+    `${ENV.API_BASE_URL}/documents/${documentId}/access-status`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!res.ok) return { has_restricted_chunks: false, access_request_status: null, approved_until: null };
+  return res.json();
+}
+
+export async function createAccessRequest(
+  documentId: string,
+  token: string,
+): Promise<AccessRequestRead> {
+  const res = await fetch(`${ENV.API_BASE_URL}/access-requests`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ document_id: documentId }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchAllAccessRequests(token: string): Promise<AccessRequestRead[]> {
+  const res = await fetch(`${ENV.API_BASE_URL}/access-requests`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function fetchMyAccessRequests(token: string): Promise<AccessRequestRead[]> {
+  const res = await fetch(`${ENV.API_BASE_URL}/access-requests/my`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function approveAccessRequest(
+  requestId: string,
+  token: string,
+  opts?: { admin_note?: string; expires_at?: string },
+): Promise<AccessRequestRead> {
+  const res = await fetch(`${ENV.API_BASE_URL}/access-requests/${requestId}/approve`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(opts ?? {}),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function revokeAccessRequest(
+  requestId: string,
+  token: string,
+): Promise<AccessRequestRead> {
+  const res = await fetch(`${ENV.API_BASE_URL}/access-requests/${requestId}/revoke`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function rejectAccessRequest(
+  requestId: string,
+  token: string,
+  adminNote?: string,
+): Promise<AccessRequestRead> {
+  const res = await fetch(`${ENV.API_BASE_URL}/access-requests/${requestId}/reject`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ admin_note: adminNote }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 

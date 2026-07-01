@@ -16,6 +16,11 @@ import {
   Building2,
   Pencil,
   Network,
+  Lock,
+  Clock,
+  ShieldCheck,
+  ShieldX,
+  Infinity,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -64,6 +69,10 @@ import {
   openDocumentFile,
   deleteDocument,
   submitForReview,
+  fetchMyAccessRequests,
+  createAccessRequest,
+  getDocumentAccessStatus,
+  AccessRequestRead,
 } from "@/services/documents.api";
 import {
   fetchOrgUnits,
@@ -468,6 +477,12 @@ export default function DocumentsPage() {
   const [uploadingVersion, setUploadingVersion] = useState(false);
   const fileVersionInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Access request state — map docId → latest request
+  const [accessRequestMap, setAccessRequestMap] = useState<Map<string, AccessRequestRead>>(new Map());
+  const [requestingDocId, setRequestingDocId] = useState<string | null>(null);
+  // Restricted chunks map — docId → true if doc has chunks above user clearance
+  const [restrictedDocIds, setRestrictedDocIds] = useState<Set<string>>(new Set());
+
   const canEdit = (user?.oui_positions.length ?? 0) > 0;
   const canDelete = isCorpMember;
 
@@ -537,12 +552,26 @@ export default function DocumentsPage() {
   useEffect(() => {
     setLoadingDocs(true);
     fetchDocuments(token)
-      .then(setDocuments)
+      .then(async (docs) => {
+        setDocuments(docs);
+        if (isCorpMember) return; // admin không cần check chunk restriction
+        // Fetch access status song song cho tất cả docs để biết cái nào có chunk restricted
+        const results = await Promise.allSettled(
+          docs.map((d) => getDocumentAccessStatus(d.id, token)),
+        );
+        const restricted = new Set<string>();
+        results.forEach((r, i) => {
+          if (r.status === "fulfilled" && r.value.has_restricted_chunks) {
+            restricted.add(docs[i].id);
+          }
+        });
+        setRestrictedDocIds(restricted);
+      })
       .catch(() =>
         toast({ variant: "destructive", title: "Không thể tải tài liệu" }),
       )
       .finally(() => setLoadingDocs(false));
-  }, [docsRefresh]);
+  }, [docsRefresh, isCorpMember]);
 
   useEffect(() => {
     fetchOrgUnits(token)
@@ -552,6 +581,39 @@ export default function DocumentsPage() {
       .then(setOrgUnitInstances)
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchMyAccessRequests(token)
+      .then((reqs) => {
+        const map = new Map<string, AccessRequestRead>();
+        for (const r of reqs) {
+          const existing = map.get(r.document_id);
+          if (!existing || new Date(r.created_at) > new Date(existing.created_at)) {
+            map.set(r.document_id, r);
+          }
+        }
+        setAccessRequestMap(map);
+      })
+      .catch(() => {});
+  }, [docsRefresh]);
+
+  const handleRequestAccess = async (doc: DocumentRead) => {
+    setRequestingDocId(doc.id);
+    try {
+      const req = await createAccessRequest(doc.id, token);
+      setAccessRequestMap((prev) => new Map(prev).set(doc.id, req));
+      toast({ variant: "success", title: "Đã gửi yêu cầu xem tài liệu" });
+    } catch (err: any) {
+      const msg = err?.message ?? "";
+      if (msg.includes("409") || msg.toLowerCase().includes("pending")) {
+        toast({ variant: "destructive", title: "Đã có yêu cầu đang chờ xử lý" });
+      } else {
+        toast({ variant: "destructive", title: "Không thể gửi yêu cầu", description: msg });
+      }
+    } finally {
+      setRequestingDocId(null);
+    }
+  };
 
   const myDocuments = useMemo(
     () => documents.filter((d) => d.owner_user_id === user?.id),
@@ -749,7 +811,17 @@ export default function DocumentsPage() {
                 </TableCell>
 
                 <TableCell>
-                  <SensitivityBadge level={doc.sensitivity} />
+                  <div className="flex items-center gap-1.5">
+                    <SensitivityBadge level={doc.sensitivity} />
+                    {restrictedDocIds.has(doc.id) && (() => {
+                      const ar = accessRequestMap.get(doc.id);
+                      if (!ar) return <Lock className="h-3.5 w-3.5 text-destructive" title="Bạn không có quyền xem toàn bộ tài liệu này" />;
+                      if (ar.status === "pending") return <Clock className="h-3.5 w-3.5 text-amber-500" title="Đang chờ phê duyệt" />;
+                      if (ar.status === "approved" && (ar.expires_at === null || new Date(ar.expires_at) > new Date())) return <CountdownTimer expiresAt={ar.expires_at} compact />;
+                      if (ar.status === "rejected") return <ShieldX className="h-3.5 w-3.5 text-destructive" title="Yêu cầu bị từ chối" />;
+                      return <Lock className="h-3.5 w-3.5 text-destructive" title="Quyền truy cập đã hết hạn" />;
+                    })()}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={doc.status as DocumentStatus} />
@@ -775,10 +847,27 @@ export default function DocumentsPage() {
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuContent align="end" className="w-52">
                       <DropdownMenuItem onClick={() => handleView(doc)}>
                         <Eye className="mr-2 h-4 w-4" /> Xem
                       </DropdownMenuItem>
+                      {restrictedDocIds.has(doc.id) && (() => {
+                        const ar = accessRequestMap.get(doc.id);
+                        const isPending = ar?.status === "pending";
+                        const isApproved = ar?.status === "approved" && (ar.expires_at === null || new Date(ar.expires_at) > new Date());
+                        return (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              disabled={isPending || isApproved || requestingDocId === doc.id}
+                              onClick={() => handleRequestAccess(doc)}
+                            >
+                              <Lock className="mr-2 h-4 w-4" />
+                              {isPending ? "Đang chờ phê duyệt" : isApproved ? "Đã được phê duyệt" : ar?.status === "approved" ? "Gia hạn quyền truy cập" : "Yêu cầu xem tài liệu"}
+                            </DropdownMenuItem>
+                          </>
+                        );
+                      })()}
                       {isCorpMember && (
                         <DropdownMenuItem onClick={() => openEdit(doc)}>
                           <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa
@@ -954,6 +1043,7 @@ export default function DocumentsPage() {
               onView={handleView}
             />
           </TabsContent>
+
         </Tabs>
       </div>
 
@@ -1211,3 +1301,60 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+// ── Countdown timer component ─────────────────────────────────────────────────
+export function CountdownTimer({ expiresAt, compact = false }: { expiresAt: string | null; compact?: boolean }) {
+  const [remaining, setRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!expiresAt) return;
+    const update = () => setRemaining(Math.max(0, new Date(expiresAt).getTime() - Date.now()));
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+
+  if (!expiresAt) {
+    return compact ? (
+      <span className="inline-flex items-center gap-0.5 text-green-600 text-[11px] font-medium">
+        <Infinity className="h-3 w-3" />
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 text-green-600 font-medium text-sm">
+        <Infinity className="h-3.5 w-3.5" /> Vĩnh viễn
+      </span>
+    );
+  }
+  if (remaining === null) return null;
+  if (remaining === 0) {
+    return <span className={`text-destructive font-medium ${compact ? "text-[11px]" : "text-sm"}`}>Hết hạn</span>;
+  }
+
+  const totalSecs = Math.floor(remaining / 1000);
+  const days  = Math.floor(totalSecs / 86400);
+  const hours = Math.floor((totalSecs % 86400) / 3600);
+  const mins  = Math.floor((totalSecs % 3600) / 60);
+  const secs  = totalSecs % 60;
+
+  const parts: string[] = [];
+  if (!compact) {
+    if (days  > 0) parts.push(`${days}n`);
+    if (hours > 0) parts.push(`${hours}g`);
+    if (mins  > 0) parts.push(`${mins}p`);
+    parts.push(`${String(secs).padStart(2, "0")}s`);
+  } else {
+    // compact: chỉ hiện đơn vị lớn nhất + đơn vị nhỏ hơn
+    if (days  > 0) parts.push(`${days}n${hours}g`);
+    else if (hours > 0) parts.push(`${hours}g${String(mins).padStart(2, "0")}p`);
+    else parts.push(`${mins}p${String(secs).padStart(2, "0")}s`);
+  }
+
+  const color = totalSecs < 3600 ? "text-destructive" : totalSecs < 86400 ? "text-amber-500" : "text-green-600";
+
+  return (
+    <span className={`font-mono font-semibold tabular-nums ${compact ? "text-[11px]" : "text-sm"} ${color}`}>
+      {parts.join(" ")}
+    </span>
+  );
+}
+

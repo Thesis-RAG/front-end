@@ -1,5 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { getPendingReviewCount } from "@/services/documents.api";
 import {
   MessageSquare,
   Search,
@@ -81,8 +83,17 @@ const navItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-  const { user, hasPermission, logout, login } = useAuth();
+  const { user, hasPermission, logout, login, token, isCorpMember } = useAuth();
   const location = useLocation();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (!isCorpMember || !token) return;
+    const fetchCount = () => getPendingReviewCount(token).then(setPendingCount);
+    fetchCount();
+    const id = setInterval(fetchCount, 30_000);
+    return () => clearInterval(id);
+  }, [isCorpMember, token]);
 
   const filteredNavItems = navItems.filter(
     (item) => !item.permission || hasPermission(item.permission),
@@ -136,7 +147,12 @@ export function AppSidebar() {
                     <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 rounded-r-full bg-sidebar-primary" />
                   )}
                   <Icon className={cn("h-4 w-4 shrink-0", isActive && "text-sidebar-primary")} />
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {item.path === "/approvals" && pendingCount > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white leading-none">
+                      {pendingCount > 99 ? "99+" : pendingCount}
+                    </span>
+                  )}
                 </NavLink>
               </li>
             );

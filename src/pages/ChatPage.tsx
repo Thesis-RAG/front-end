@@ -91,6 +91,7 @@ export default function ChatPage() {
             excerpt: s.excerpt ?? "",
             surroundingContext: s.surroundingContext ?? "",
             relevance: s.relevance,
+            docRestricted: s.docRestricted ?? false,
           })),
           traceId: item.traceId,
           status: assistant.status ?? "success",

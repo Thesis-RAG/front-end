@@ -622,7 +622,7 @@ export function SourcesPanel({
                       className="flex items-center gap-1 shrink-0 ml-auto justify-end"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {!isGmailSource(citation) && (
+                      {!isGmailSource(citation) && !citation.docRestricted && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -634,7 +634,7 @@ export function SourcesPanel({
                           <Eye className="h-3 w-3" />
                         </Button>
                       )}
-                      {!isGmailSource(citation) && (
+                      {!isGmailSource(citation) && !citation.docRestricted && (
                         <Button
                           variant="ghost"
                           size="icon"
