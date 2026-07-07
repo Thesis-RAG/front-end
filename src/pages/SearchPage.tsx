@@ -8,6 +8,7 @@ import {
   X,
   ChevronDown,
   Check,
+  Lock,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,15 @@ import {
 } from "@/components/ui/dialog";
 import { SearchMode, SensitivityLevel, SensitivityRank } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { cn } from "@/lib/utils";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { searchDocuments } from "@/services/chat.api";
+import {
+  createAccessRequest,
+  fetchMyAccessRequests,
+  AccessRequestRead,
+} from "@/services/documents.api";
 import {
   fetchOrgUnits,
   fetchOrgUnitInstances,
@@ -44,6 +53,8 @@ interface SearchChunk {
   semantic_score: number;
   keyword_score: number;
   sources: string[];
+  doc_restricted?: boolean;
+  chunk_blurred?: boolean;
   metadata: {
     document_id: string;
     document_title: string;
@@ -152,6 +163,8 @@ export default function SearchPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [accessRequestMap, setAccessRequestMap] = useState<Map<string, AccessRequestRead>>(new Map());
+  const [requestingDocId, setRequestingDocId] = useState<string | null>(null);
 
   const { token, user, isCorpMember } = useAuth();
 
@@ -193,28 +206,48 @@ export default function SearchPage() {
   );
 
   useEffect(() => {
-    fetchOrgUnits(token)
-      .then(setOrgUnits)
-      .catch(() => {});
-    fetchOrgUnitInstances(token)
-      .then(setOrgUnitInstances)
-      .catch(() => {});
+    fetchOrgUnits(token).then(setOrgUnits).catch(() => {});
+    fetchOrgUnitInstances(token).then(setOrgUnitInstances).catch(() => {});
   }, []);
 
-  const containsKeyword = (text: string, q: string) => {
-    if (!q) return true;
-    const words = q.toLowerCase().split(/\s+/);
-    const lower = text.toLowerCase();
-    return words.every((w) => lower.includes(w));
+  useEffect(() => {
+    fetchMyAccessRequests(token)
+      .then((reqs) => {
+        const map = new Map<string, AccessRequestRead>();
+        for (const r of reqs) {
+          const existing = map.get(r.document_id);
+          if (!existing || new Date(r.created_at) > new Date(existing.created_at)) {
+            map.set(r.document_id, r);
+          }
+        }
+        setAccessRequestMap(map);
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const handleRequestAccess = async (documentId: string) => {
+    setRequestingDocId(documentId);
+    try {
+      const req = await createAccessRequest(documentId, token);
+      setAccessRequestMap((prev) => new Map(prev).set(documentId, req));
+      toast({ variant: "success", title: "Đã gửi yêu cầu xem tài liệu" });
+    } catch (err: any) {
+      const msg = err?.message ?? "";
+      if (msg.includes("409") || msg.toLowerCase().includes("pending")) {
+        toast({ variant: "destructive", title: "Đã có yêu cầu đang chờ xử lý" });
+      } else {
+        toast({ variant: "destructive", title: "Không thể gửi yêu cầu", description: msg });
+      }
+    } finally {
+      setRequestingDocId(null);
+    }
   };
 
   const filteredResults = results.filter((r) => {
-    const matchSensitivity =
+    return (
       sensitivityLevelFilter === "all" ||
-      Number(r.metadata.sensitivity) === sensitivityLevelFilter;
-    const matchKeyword =
-      searchMode !== "keyword" || containsKeyword(r.document_text, query);
-    return matchSensitivity && matchKeyword;
+      Number(r.metadata.sensitivity) === sensitivityLevelFilter
+    );
   });
 
   const handleSearch = async () => {
@@ -226,7 +259,7 @@ export default function SearchPage() {
         query,
         searchMode,
         token,
-        10,
+        15,
         ouiFilter.length > 0 ? ouiFilter : undefined,
       );
       setResults(data);
@@ -370,6 +403,9 @@ export default function SearchPage() {
                       key={result.chunk_id ?? idx}
                       result={result}
                       query={query}
+                      accessRequest={accessRequestMap.get(result.metadata.document_id)}
+                      isRequesting={requestingDocId === result.metadata.document_id}
+                      onRequestAccess={handleRequestAccess}
                     />
                   ))}
                 </div>
@@ -466,56 +502,208 @@ export default function SearchPage() {
   );
 }
 
-// ── SearchResultCard (giữ nguyên) ─────────────────────────────────────────────
+// ── Highlight helpers ─────────────────────────────────────────────────────────
+function buildTerms(query: string): string[] {
+  return query
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 1);
+}
+
+function HighlightedText({ text, terms }: { text: string; terms: string[] }) {
+  if (!terms.length || !text) return <>{text}</>;
+  const escaped = terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const atom = escaped.join("|");
+  // merge consecutive terms (with spaces between) into one highlight block
+  const pattern = new RegExp(`((?:${atom})(?:\\s+(?:${atom}))*)`, "gi");
+  const parts = text.split(pattern);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <mark
+            key={i}
+            className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5 not-italic"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
+function applyHL(children: React.ReactNode, terms: string[]): React.ReactNode {
+  if (!terms.length) return children;
+  const arr = Array.isArray(children) ? children : [children];
+  return arr.map((child, i) =>
+    typeof child === "string" ? (
+      <HighlightedText key={i} text={child} terms={terms} />
+    ) : (
+      child
+    ),
+  );
+}
+
+// Render chunk text: detects pipe-table rows and || format → HTML table; other lines → ReactMarkdown
+function ChunkContent({ text, terms = [] }: { text: string; terms?: string[] }) {
+  const isPipeRow = (line: string) => {
+    const t = line.trim();
+    return t.startsWith("|") && t.lastIndexOf("|") > 0;
+  };
+  const parseCells = (line: string) =>
+    line.trim().split("|").map((c) => c.trim()).filter(Boolean);
+  const isAlignRow = (cells: string[]) =>
+    cells.length > 0 && cells.every((c) => /^:?-+:?$/.test(c));
+
+  type Seg =
+    | { type: "table"; rows: string[][] }
+    | { type: "text"; line: string };
+
+  const lines = text.split("\n");
+  const segments: Seg[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Format 1: single line with || row separators
+    if (trimmed.includes("||")) {
+      const rawRows = trimmed
+        .split("||")
+        .map((r) => r.split("|").map((c) => c.trim()).filter(Boolean))
+        .filter((r) => r.length > 0);
+      if (rawRows.length >= 2) {
+        segments.push({ type: "table", rows: rawRows });
+        i++;
+        continue;
+      }
+    }
+
+    // Format 2: consecutive lines each starting/ending with |
+    if (isPipeRow(line)) {
+      const tableRows: string[][] = [];
+      while (i < lines.length && isPipeRow(lines[i])) {
+        const cells = parseCells(lines[i]);
+        if (!isAlignRow(cells)) tableRows.push(cells);
+        i++;
+      }
+      if (tableRows.length >= 2) {
+        segments.push({ type: "table", rows: tableRows });
+        continue;
+      }
+      tableRows.forEach((row) =>
+        segments.push({ type: "text", line: "| " + row.join(" | ") + " |" }),
+      );
+      continue;
+    }
+
+    segments.push({ type: "text", line });
+    i++;
+  }
+
+  return (
+    <div className="text-[13px] space-y-1.5">
+      {segments.map((seg, idx) => {
+        if (seg.type === "table") {
+          const [header, ...body] = seg.rows;
+          return (
+            <div key={idx} className="overflow-x-auto rounded border border-border">
+              <table className="w-full border-collapse text-[12px]">
+                <thead>
+                  <tr className="bg-muted">
+                    {header.map((h, j) => (
+                      <th
+                        key={j}
+                        className="px-3 py-2 text-left font-semibold text-foreground border-b border-border"
+                      >
+                        <HighlightedText text={h} terms={terms} />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {body.map((row, j) => (
+                    <tr
+                      key={j}
+                      className={cn(
+                        "border-b border-border last:border-0",
+                        j % 2 === 1 && "bg-muted/30",
+                      )}
+                    >
+                      {row.map((cell, k) => (
+                        <td
+                          key={k}
+                          className="px-3 py-1.5 text-muted-foreground align-top"
+                        >
+                          <HighlightedText text={cell} terms={terms} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+
+        const t = seg.line.trim();
+        if (!t) return <div key={idx} className="h-0.5" />;
+
+        return (
+          <ReactMarkdown
+            key={idx}
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => (
+                <p className="my-0 leading-relaxed text-muted-foreground">{applyHL(children, terms)}</p>
+              ),
+              strong: ({ children }) => (
+                <strong className="font-semibold text-foreground">{applyHL(children, terms)}</strong>
+              ),
+              h1: ({ children }) => (
+                <h1 className="text-sm font-semibold text-foreground">{applyHL(children, terms)}</h1>
+              ),
+              h2: ({ children }) => (
+                <h2 className="text-[13px] font-semibold text-foreground">{applyHL(children, terms)}</h2>
+              ),
+              h3: ({ children }) => (
+                <h3 className="text-[13px] font-medium text-foreground">{applyHL(children, terms)}</h3>
+              ),
+            }}
+          >
+            {seg.line}
+          </ReactMarkdown>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── SearchResultCard ──────────────────────────────────────────────────────────
 function SearchResultCard({
   result,
   query,
+  accessRequest,
+  isRequesting,
+  onRequestAccess,
 }: {
   result: SearchChunk;
   query: string;
+  accessRequest?: AccessRequestRead;
+  isRequesting: boolean;
+  onRequestAccess: (docId: string) => void;
 }) {
-  const highlightText = (text: string) => {
-    if (!query) return text;
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-    const lowerText = text.toLowerCase();
-    let ranges: [number, number][] = [];
-    words.forEach((word) => {
-      let startIndex = 0;
-      while (true) {
-        const index = lowerText.indexOf(word, startIndex);
-        if (index === -1) break;
-        ranges.push([index, index + word.length]);
-        startIndex = index + word.length;
-      }
-    });
-    if (ranges.length === 0) return text;
-    ranges.sort((a, b) => a[0] - b[0]);
-    const merged: [number, number][] = [];
-    let current = ranges[0];
-    for (let i = 1; i < ranges.length; i++) {
-      const next = ranges[i];
-      if (next[0] <= current[1] + 1) {
-        current[1] = Math.max(current[1], next[1]);
-      } else {
-        merged.push(current);
-        current = next;
-      }
-    }
-    merged.push(current);
-    const result = [];
-    let lastIndex = 0;
-    merged.forEach(([start, end], i) => {
-      if (start > lastIndex) result.push(text.slice(lastIndex, start));
-      result.push(
-        <mark key={i} className="bg-yellow-100 text-foreground rounded px-0.5">
-          {text.slice(start, end)}
-        </mark>,
-      );
-      lastIndex = end;
-    });
-    if (lastIndex < text.length) result.push(text.slice(lastIndex));
-    return result;
-  };
+  const isBlurred = result.chunk_blurred === true;
+  const isRestricted = result.doc_restricted === true;
+  const terms = buildTerms(query);
+
+  const reqStatus = accessRequest?.status;
+  const isPending = reqStatus === "pending";
+  const isApproved = reqStatus === "approved";
 
   return (
     <div className="group rounded-lg border border-border bg-card p-4 transition-shadow hover:shadow-md">
@@ -523,7 +711,7 @@ function SearchResultCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-medium text-foreground">
-              {result.metadata.document_title}
+              <HighlightedText text={result.metadata.document_title} terms={terms} />
             </h3>
             <SensitivityLevelBadge
               level={Number(result.metadata.sensitivity)}
@@ -531,6 +719,11 @@ function SearchResultCard({
             <Badge variant="outline" className="text-xs font-normal">
               Trang {result.metadata.page_start}–{result.metadata.page_end}
             </Badge>
+            {isRestricted && (
+              <Badge variant="outline" className="text-[10px] font-normal text-yellow-600 border-yellow-400">
+                Hạn chế xem
+              </Badge>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-2">
             <Badge variant="secondary" className="text-[10px] font-semibold">
@@ -554,16 +747,54 @@ function SearchResultCard({
               {Math.round(result.score * 100)}%
             </div>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-            <a href={`/documents/${result.metadata.document_id}`}>
-              <ExternalLink className="h-4 w-4" />
-            </a>
-          </Button>
+          {isRestricted ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5 text-[11px] shrink-0"
+              disabled={isPending || isApproved || isRequesting}
+              onClick={() => onRequestAccess(result.metadata.document_id)}
+            >
+              <Lock className="h-3 w-3" />
+              {isRequesting
+                ? "Đang gửi..."
+                : isPending
+                  ? "Chờ duyệt"
+                  : isApproved
+                    ? "Đã duyệt"
+                    : "Yêu cầu xem"}
+            </Button>
+          ) : (
+            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+              <a href={`/documents/${result.metadata.document_id}`}>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </Button>
+          )}
         </div>
       </div>
-      <p className="mt-3 text-[13px] text-muted-foreground line-clamp-4">
-        {highlightText(result.document_text)}
-      </p>
+
+      {/* Nội dung chunk — markdown, blur nếu chunk_blurred */}
+      <div className="relative mt-3">
+        <div
+          className={cn(
+            isBlurred && "blur-sm select-none pointer-events-none",
+          )}
+        >
+          <ChunkContent text={result.document_text} terms={terms} />
+        </div>
+        {isBlurred && (
+          <div className="absolute inset-0 flex items-center justify-center rounded bg-background/70">
+            <p className="px-6 text-center text-xs text-muted-foreground">
+              <span className="mb-0.5 block font-medium text-foreground">
+                Nội dung bị che
+              </span>
+              Tài liệu này yêu cầu phê duyệt từ admin để xem đầy đủ.
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
         <span>Từ khóa: {Math.round(result.keyword_score * 100)}%</span>
         <span>·</span>

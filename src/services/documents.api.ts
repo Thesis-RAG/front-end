@@ -200,8 +200,10 @@ export type AccessRequestRead = {
   id: string;
   document_id: string;
   document_title: string | null;
+  document_sensitivity: number | null;
   user_id: string;
   requester_name: string | null;
+  requester_email: string | null;
   status: "pending" | "approved" | "rejected";
   expires_at: string | null;
   admin_id: string | null;

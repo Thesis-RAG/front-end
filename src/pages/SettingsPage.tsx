@@ -43,7 +43,11 @@ export default function SettingsPage() {
   const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.0);
   const [ragSaving, setRagSaving] = useState(false);
 
-  // Load RAG settings on mount
+  // ── Access control state ─────────────────────────────────────────────
+  const [queryScopeMode, setQueryScopeMode] = useState<"full_db" | "branch_only">("full_db");
+  const [accessSaving, setAccessSaving] = useState(false);
+
+  // Load all settings on mount
   useState(() => {
     if (!token) return;
     fetch(`${ENV.API_BASE_URL}/settings`, {
@@ -54,6 +58,7 @@ export default function SettingsPage() {
         if (data["rag.top_k"] !== undefined) setTopK(Number(data["rag.top_k"]));
         if (data["rag.similarity_threshold"] !== undefined)
           setSimilarityThreshold(Number(data["rag.similarity_threshold"]));
+        if (data["query_scope_mode"]) setQueryScopeMode(data["query_scope_mode"]);
       })
       .catch(() => {});
   });
@@ -75,6 +80,23 @@ export default function SettingsPage() {
       toast({ title: "Lỗi lưu cấu hình", variant: "destructive" });
     } finally {
       setRagSaving(false);
+    }
+  };
+
+  const handleSaveAccess = async () => {
+    if (!token) return;
+    setAccessSaving(true);
+    try {
+      await fetch(`${ENV.API_BASE_URL}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ query_scope_mode: queryScopeMode }),
+      });
+      toast({ title: "Đã lưu cấu hình kiểm soát truy cập" });
+    } catch {
+      toast({ title: "Lỗi lưu cấu hình", variant: "destructive" });
+    } finally {
+      setAccessSaving(false);
     }
   };
 
@@ -403,6 +425,54 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+
+              {/* Query scope mode */}
+              <div className="space-y-2">
+                <div>
+                  <Label>Phạm vi truy vấn RAG</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Tập tài liệu được tìm kiếm khi người dùng đặt câu hỏi
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {(["full_db", "branch_only"] as const).map((mode) => (
+                    <label
+                      key={mode}
+                      className={cn(
+                        "flex items-start gap-3 rounded-lg border-2 px-4 py-3 cursor-pointer transition-colors",
+                        queryScopeMode === mode
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-muted-foreground/40"
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="queryScopeMode"
+                        value={mode}
+                        checked={queryScopeMode === mode}
+                        onChange={() => setQueryScopeMode(mode)}
+                        className="mt-0.5 accent-primary"
+                      />
+                      <div>
+                        <p className="text-sm font-medium leading-none">
+                          {mode === "full_db" ? "Toàn bộ hệ thống" : "Trong nhánh tổ chức"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
+                          {mode === "full_db"
+                            ? "Tìm kiếm tất cả tài liệu trong tổ chức."
+                            : "Chỉ tìm kiếm tài liệu thuộc phạm vi của người dùng."}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={handleSaveAccess} disabled={accessSaving}>
+                    {accessSaving ? "Đang lưu..." : <><Save className="mr-1.5 h-3.5 w-3.5" />Lưu</>}
+                  </Button>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Chế độ chỉ hiển thị tài liệu đã duyệt</Label>
