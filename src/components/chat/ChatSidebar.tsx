@@ -124,10 +124,7 @@ export function ChatSidebar({
       {/* Branding header */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-border/60">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10">
-            <Brain className="h-4 w-4 text-primary" />
-          </div>
-          <span className="text-sm font-semibold text-foreground tracking-tight">CorpAI</span>
+          <span className="text-sm font-semibold text-foreground tracking-tight">Gần đây</span>
         </div>
         <Button
           variant="ghost"
@@ -218,20 +215,6 @@ export function ChatSidebar({
         ))}
       </div>
 
-      {/* User footer */}
-      <div className="border-t border-border/60 p-2">
-        <div className="flex items-center gap-2.5 rounded-lg px-2 py-2 hover:bg-muted/60 transition-colors cursor-default">
-          <Avatar className="h-7 w-7 shrink-0">
-            <AvatarFallback className="text-[11px] font-bold bg-gradient-to-br from-primary to-blue-600 text-white">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-foreground truncate">{displayName}</p>
-            <p className="text-[10px] text-muted-foreground">Tài khoản</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
