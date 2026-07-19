@@ -1,5 +1,6 @@
-// src/components/chat/DrivePicker.tsx
+/** DrivePicker: modal file picker for a shared Google Drive folder with search, type filtering, and text extraction. */
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   HardDrive,
   X,
@@ -33,6 +34,7 @@ interface DrivePickerProps {
   onClose: () => void;
 }
 
+// Return the appropriate Lucide icon component for a given MIME type.
 function getMimeIcon(mimeType: string) {
   if (mimeType.includes("spreadsheet") || mimeType.includes("csv")) {
     return <FileSpreadsheet className="h-4 w-4 text-green-500" />;
@@ -47,6 +49,7 @@ function getMimeIcon(mimeType: string) {
   return <File className="h-4 w-4 text-muted-foreground" />;
 }
 
+// Convert a raw byte-count string to a human-readable size label (B / KB / MB).
 function formatSize(size?: string): string {
   if (!size) return "";
   const bytes = parseInt(size, 10);
@@ -56,6 +59,7 @@ function formatSize(size?: string): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Drive file picker modal: loads files from a shared Drive folder URL and passes extracted text to the parent.
 export function DrivePicker({ onAttach, onClose }: DrivePickerProps) {
   const { toast } = useToast();
   const [folderUrl, setFolderUrl] = useState<string>(() => {
@@ -68,7 +72,7 @@ export function DrivePicker({ onAttach, onClose }: DrivePickerProps) {
   const [loadingFileId, setLoadingFileId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Load files khi mount nếu đã có folder URL
+  // Load the file list on mount if a Drive folder URL was previously saved in localStorage.
   useEffect(() => {
     const saved = localStorage.getItem("drive_folder_url");
     if (saved) {
@@ -76,7 +80,7 @@ export function DrivePicker({ onAttach, onClose }: DrivePickerProps) {
     }
   }, []);
 
-  // Đóng khi click ngoài
+  // Close the picker when the user clicks outside the modal container.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -90,6 +94,7 @@ export function DrivePicker({ onAttach, onClose }: DrivePickerProps) {
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
+  // Fetch files from the Drive folder identified by the given URL; updates loading/error state.
   const loadFiles = async (url: string) => {
     const folderId = extractFolderId(url);
     if (!folderId) {
@@ -112,12 +117,14 @@ export function DrivePicker({ onAttach, onClose }: DrivePickerProps) {
     }
   };
 
+  // Persist the folder URL to localStorage and trigger a file list refresh.
   const handleLoadFromInput = () => {
     if (!folderUrl.trim()) return;
     localStorage.setItem("drive_folder_url", folderUrl.trim());
     loadFiles(folderUrl.trim());
   };
 
+  // Download the selected Drive file as plain text and pass it to the parent via onAttach.
   const handleSelectFile = async (file: DriveFile) => {
     if (!isFileSupported(file)) {
       toast({
@@ -148,11 +155,12 @@ export function DrivePicker({ onAttach, onClose }: DrivePickerProps) {
     }
   };
 
+  // Client-side search filter applied on top of the loaded file list.
   const filteredFiles = files.filter((f) =>
     f.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  return (
+  return createPortal(
     // Backdrop
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
@@ -331,6 +339,7 @@ export function DrivePicker({ onAttach, onClose }: DrivePickerProps) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

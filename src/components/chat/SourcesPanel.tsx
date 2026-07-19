@@ -1,3 +1,4 @@
+/** SourcesPanel: slide-in panel showing RAG citation cards with keyword-highlighted excerpts, relevance scores, and file actions. */
 import { useState, useEffect } from "react";
 import { X, Eye, Plus, FileText, FileCode2, File, Mail } from "lucide-react";
 import { Citation } from "@/types";
@@ -20,10 +21,12 @@ interface SourcesPanelProps {
   focusCitationId?: string | null;
 }
 
+// Return true if the citation originates from Gmail (documentId starts with "gmail_").
 function isGmailSource(citation: Citation) {
   return citation.documentId?.startsWith("gmail_");
 }
 
+// Return the appropriate icon component based on the citation source type and file extension.
 function getFileIcon(citation: Citation) {
   if (isGmailSource(citation)) return Mail;
   const lower = (citation.documentTitle ?? "").toLowerCase();
@@ -32,6 +35,7 @@ function getFileIcon(citation: Citation) {
   return File;
 }
 
+// Return a human-readable file type label for the citation source.
 function getFileTypeLabel(citation: Citation) {
   if (isGmailSource(citation)) return "Gmail";
   const lower = (citation.documentTitle ?? "").toLowerCase();
@@ -41,8 +45,7 @@ function getFileTypeLabel(citation: Citation) {
   return "Tài liệu";
 }
 
-/** Word-wrap flat text (no newlines) at ~65 chars for readable display */
-/** Vietnamese stop-words + common English stop-words to ignore */
+// Stop-words filtered out during keyword extraction (placeholder — currently empty).
 const STOP_WORDS = new Set([]);
 
 /** Extract meaningful keywords from a query — simple unigrams only */
@@ -67,7 +70,7 @@ function textContainsKeyword(text: string, keywords: string[]): boolean {
 function getBestExcerptWindow(excerpt: string, keywords: string[]): string {
   if (!excerpt) return "";
 
-  // Hard limit trước tiên — tránh chuỗi dài không có space
+  // Hard upper bound — avoids very long strings with no spaces.
   const MAX_LEN = 150;
 
   if (!keywords.length) return excerpt.slice(0, MAX_LEN);
@@ -99,7 +102,7 @@ function highlightKeywords(
   const lowerText = text.toLowerCase();
   const ranges: Array<{ start: number; end: number }> = [];
 
-  // 1. Tìm tất cả match
+  // 1. Collect all keyword match ranges.
   keywords.forEach((kw) => {
     const lowerKw = kw.toLowerCase();
     let startIndex = 0;
@@ -121,12 +124,12 @@ function highlightKeywords(
     return [{ text, highlight: false }];
   }
 
-  // 2. Sort
+  // 2. Sort ranges by start position.
   ranges.sort((a, b) => a.start - b.start);
 
-  // 3. Merge nếu gần nhau (<= 2 ký tự)
+  // 3. Merge overlapping or adjacent ranges (gap ≤ GAP characters).
   const merged: typeof ranges = [];
-  const GAP = 2; // 👈 chỉnh độ “dính”
+  const GAP = 2;
 
   for (const r of ranges) {
     if (!merged.length) {
@@ -137,14 +140,14 @@ function highlightKeywords(
     const last = merged[merged.length - 1];
 
     if (r.start <= last.end + GAP) {
-      // gần nhau → merge
+      // Overlapping or close — extend the last range.
       last.end = Math.max(last.end, r.end);
     } else {
       merged.push(r);
     }
   }
 
-  // 4. Build result
+  // 4. Build the annotated segment list.
   const result: Array<{ text: string; highlight: boolean }> = [];
   let lastIndex = 0;
 
@@ -172,6 +175,66 @@ function highlightKeywords(
   }
 
   return result;
+}
+
+interface MdSegment { text: string; bold: boolean; italic: boolean }
+
+/** Split a single line into bold/italic segments by parsing ***…***, **…**, *…* markers */
+function parseInlineMd(line: string): MdSegment[] {
+  const segs: MdSegment[] = [];
+  // Match ***…*** first, then **…**, then *…* — non-greedy, same line
+  const re = /(\*{3})((?:(?!\*{3}).)+?)(\*{3})|(\*{2})((?:(?!\*{2}).)+?)(\*{2})|(\*)((?:(?!\*).)+?)(\*)/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line)) !== null) {
+    if (m.index > last) segs.push({ text: line.slice(last, m.index), bold: false, italic: false });
+    if (m[1])      segs.push({ text: m[2], bold: true,  italic: true  }); // ***…***
+    else if (m[4]) segs.push({ text: m[5], bold: true,  italic: false }); // **…**
+    else if (m[7]) segs.push({ text: m[8], bold: false, italic: true  }); // *…*
+    last = m.index + m[0].length;
+  }
+  if (last < line.length) segs.push({ text: line.slice(last), bold: false, italic: false });
+  return segs;
+}
+
+/** Rendered excerpt with keyword highlights, newline-to-br, and inline bold/italic markdown */
+function HighlightedExcerpt({
+  text,
+  keywords,
+}: {
+  text: string;
+  keywords: string[];
+}) {
+  const lines = text.split('\n');
+  return (
+    <>
+      {lines.map((line, li) => {
+        const mdSegs = parseInlineMd(line);
+        const nodes = mdSegs.map((seg, si) => {
+          const kwParts = highlightKeywords(seg.text, keywords);
+          const inner = kwParts.map((p, pi) =>
+            p.highlight ? (
+              <mark key={pi} className="bg-yellow-200 dark:bg-yellow-800/60 text-foreground rounded-[2px] px-0.5">
+                {p.text}
+              </mark>
+            ) : (
+              <span key={pi}>{p.text}</span>
+            )
+          );
+          if (seg.bold && seg.italic) return <strong key={si}><em>{inner}</em></strong>;
+          if (seg.bold) return <strong key={si}>{inner}</strong>;
+          if (seg.italic) return <em key={si}>{inner}</em>;
+          return <span key={si}>{inner}</span>;
+        });
+        return (
+          <span key={li}>
+            {nodes}
+            {li < lines.length - 1 && <br />}
+          </span>
+        );
+      })}
+    </>
+  );
 }
 
 /** Detect Markdown table format: 2+ lines that start and end with | */
@@ -369,66 +432,7 @@ function TableExcerpt({ text, keywords }: { text: string; keywords: string[] }) 
   );
 }
 
-interface MdSegment { text: string; bold: boolean; italic: boolean }
-
-/** Split a single line into bold/italic segments by parsing ***…***, **…**, *…* markers */
-function parseInlineMd(line: string): MdSegment[] {
-  const segs: MdSegment[] = [];
-  // Match ***…*** first, then **…**, then *…* — non-greedy, same line
-  const re = /(\*{3})((?:(?!\*{3}).)+?)(\*{3})|(\*{2})((?:(?!\*{2}).)+?)(\*{2})|(\*)((?:(?!\*).)+?)(\*)/g;
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(line)) !== null) {
-    if (m.index > last) segs.push({ text: line.slice(last, m.index), bold: false, italic: false });
-    if (m[1])      segs.push({ text: m[2], bold: true,  italic: true  }); // ***…***
-    else if (m[4]) segs.push({ text: m[5], bold: true,  italic: false }); // **…**
-    else if (m[7]) segs.push({ text: m[8], bold: false, italic: true  }); // *…*
-    last = m.index + m[0].length;
-  }
-  if (last < line.length) segs.push({ text: line.slice(last), bold: false, italic: false });
-  return segs;
-}
-
-/** Rendered excerpt with keyword highlights, newline-to-br, and inline bold/italic markdown */
-function HighlightedExcerpt({
-  text,
-  keywords,
-}: {
-  text: string;
-  keywords: string[];
-}) {
-  const lines = text.split('\n');
-  return (
-    <>
-      {lines.map((line, li) => {
-        const mdSegs = parseInlineMd(line);
-        const nodes = mdSegs.map((seg, si) => {
-          const kwParts = highlightKeywords(seg.text, keywords);
-          const inner = kwParts.map((p, pi) =>
-            p.highlight ? (
-              <mark key={pi} className="bg-yellow-200 dark:bg-yellow-800/60 text-foreground rounded-[2px] px-0.5">
-                {p.text}
-              </mark>
-            ) : (
-              <span key={pi}>{p.text}</span>
-            )
-          );
-          if (seg.bold && seg.italic) return <strong key={si}><em>{inner}</em></strong>;
-          if (seg.bold) return <strong key={si}>{inner}</strong>;
-          if (seg.italic) return <em key={si}>{inner}</em>;
-          return <span key={si}>{inner}</span>;
-        });
-        return (
-          <span key={li}>
-            {nodes}
-            {li < lines.length - 1 && <br />}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
+// Citation sources panel: lists filtered citations with excerpt preview, relevance bar, and file actions.
 export function SourcesPanel({
   citations,
   onClose,
@@ -443,16 +447,14 @@ export function SourcesPanel({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [attachingId, setAttachingId] = useState<string | null>(null);
 
-  // Auto-expand only when a citation badge is explicitly clicked (focusCitationId)
-  // "Nguồn" button sets focusCitationId=null → no auto-expand
+  // Auto-expand the citation card when opened via a citation badge click; "Nguồn" button passes null → no expand.
   useEffect(() => {
     if (focusCitationId) setExpandedId(focusCitationId);
   }, [focusCitationId]);
 
   const keywords = extractKeywords(query);
 
-  // Filter: only show citations whose excerpt (or title) contains a keyword
-  // If no keywords extracted (very short / stop-word-only query), show all
+  // Filter citations to those whose excerpt, title, or section path contains a query keyword; show all when no keywords.
   const filteredCitations =
     keywords.length > 0
       ? citations.filter(
@@ -463,6 +465,7 @@ export function SourcesPanel({
         )
       : citations;
 
+  // Request a pre-signed download URL and open the source document in a new browser tab.
   const handleOpenFile = async (citation: Citation) => {
     if (!citation.versionId) {
       toast({ variant: "destructive", title: "No file version available" });
@@ -478,6 +481,7 @@ export function SourcesPanel({
     }
   };
 
+  // Download the cited document as plain text and attach it to the chat input as context.
   const handleAddToContext = async (citation: Citation) => {
     if (!onAttachFile) {
       toast({ title: "Coming soon" });
@@ -510,12 +514,12 @@ export function SourcesPanel({
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-gradient-to-r from-primary/5 to-transparent shrink-0">
         <div className="flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-            <Eye className="h-3.5 w-3.5 text-primary" />
+          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-200">
+            <Eye className="h-3.5 w-3.5" />
           </div>
           <span className="font-semibold text-sm text-foreground">Nguồn tham chiếu</span>
           {filteredCitations.length > 0 && (
-            <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+            <span className="text-[11px] font-bold bg-gray-200 px-2 py-0.5 rounded-full">
               {filteredCitations.length}
             </span>
           )}

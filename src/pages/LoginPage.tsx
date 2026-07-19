@@ -1,3 +1,4 @@
+/** LoginPage: email/password login form; redirects authenticated users to /chat. */
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, LogIn, Eye, EyeOff } from "lucide-react";
@@ -17,12 +18,14 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Redirect already-authenticated users away from the login page.
   useEffect(() => {
     if (isAuthenticated) navigate("/chat");
   }, [isAuthenticated, navigate]);
 
   if (isAuthenticated) return null;
 
+  // Validate inputs, call login, and navigate to /chat on success.
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");

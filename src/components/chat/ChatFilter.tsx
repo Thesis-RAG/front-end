@@ -1,3 +1,4 @@
+/** ChatFilter: collapsible OUI filter panel for narrowing RAG search scope by organisational unit. */
 import { useState } from "react";
 import { X, Network, ChevronDown, Check } from "lucide-react";
 
@@ -14,6 +15,7 @@ interface ChatFilterProps {
   onClose: () => void;
 }
 
+// Renders a floating dropdown with grouped OUI checkboxes; calls onToggleOui on each selection.
 export function ChatFilter({
   availableOuis,
   selectedOuiIds,
@@ -23,7 +25,7 @@ export function ChatFilter({
   const [expandedOuName, setExpandedOuName] = useState<string | null>(null);
   const activeCount = selectedOuiIds.length;
 
-  // Group OUI theo ou_name
+  // Group OUIs by their ou_name label.
   const grouped = availableOuis.reduce<Record<string, OuiOption[]>>((acc, o) => {
     if (!acc[o.ou_name]) acc[o.ou_name] = [];
     acc[o.ou_name].push(o);
@@ -38,13 +40,14 @@ export function ChatFilter({
           <Network className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-sm font-semibold">Lọc theo đơn vị</span>
           {activeCount > 0 && (
-            <span className="text-[10px] font-medium bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">
+            <span className="text-[10px] font-medium bg-gray-900 text-white rounded-full px-1.5 py-0.5">
               {activeCount}
             </span>
           )}
         </div>
         <button
           onClick={onClose}
+          aria-label="Đóng"
           className="h-6 w-6 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           <X className="h-3.5 w-3.5" />
@@ -68,13 +71,14 @@ export function ChatFilter({
                   {/* OU header */}
                   <button
                     type="button"
+                    aria-expanded={isExpanded}
                     className="flex items-center justify-between w-full px-4 py-2.5 text-sm hover:bg-muted transition-colors"
                     onClick={() => setExpandedOuName(isExpanded ? null : ouName)}
                   >
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-[13px]">{ouName}</span>
                       {selectedCount > 0 && (
-                        <span className="text-[10px] bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
+                        <span className="text-[10px] bg-gray-900 text-white rounded-full px-1.5 py-0.5 leading-none">
                           {selectedCount}
                         </span>
                       )}
@@ -93,10 +97,12 @@ export function ChatFilter({
                           <button
                             key={o.id}
                             type="button"
-                            className="flex items-center gap-2.5 w-full px-6 py-2 text-sm hover:bg-muted transition-colors"
+                            role="checkbox"
+                            aria-checked={selected}
+                            className="flex items-start gap-2.5 w-full px-6 py-2 text-sm text-left hover:bg-muted transition-colors"
                             onClick={() => onToggleOui(o.id)}
                           >
-                            <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-input"}`}>
+                            <div className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 mt-0.5 ${selected ? "bg-gray-900 border-gray-900" : "border-input"}`}>
                               {selected && <Check className="h-3 w-3 text-white" />}
                             </div>
                             <span className="text-[13px]">{o.name}</span>

@@ -1,67 +1,11 @@
+/** DocumentsPage: document browser with table/tree views, upload/version management, access-request gating, and sensitivity filtering. */
 import { useState, useEffect, useRef, useMemo } from "react";
-import {
-  Search,
-  FileText,
-  MoreHorizontal,
-  Eye,
-  Upload,
-  X,
-  Check,
-  Trash2,
-  BookOpen,
-  User,
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Building2,
-  Pencil,
-  Network,
-  Lock,
-  Clock,
-  ShieldCheck,
-  ShieldX,
-  Infinity,
-} from "lucide-react";
+import { Upload, BookOpen, User, Network } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { DocumentStatus, SENSITIVITY_LEVEL, SENSITIVITY_COLOR } from "@/types";
 import {
   createDocument,
   uploadDocumentVersion,
@@ -81,24 +25,14 @@ import {
   OrgUnitInstance,
 } from "@/services/org_units.api";
 import { ENV } from "@/config/env";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-interface DocumentRead {
-  id: string;
-  title: string;
-  description?: string;
-  oui_ids: string[];
-  owner_user_id: string;
-  document_type: string;
-  sensitivity: number;
-  data_type: string;
-  tags: string[];
-  status: string;
-  current_version_id?: string;
-  version_count: number;
-  created_at: string;
-  updated_at: string;
-}
+import { extFromFileName } from "@/lib/file-type-icon";
+import { DocumentRead } from "@/types/documents";
+import { TreeView } from "@/components/documents/OuiTreeView";
+import { DocTabContent } from "@/components/documents/DocTabContent";
+import { DocumentTableBaseProps } from "@/components/documents/DocumentTable";
+import { UploadDialog } from "@/components/documents/UploadDialog";
+import { UploadVersionDialog } from "@/components/documents/UploadVersionDialog";
+import { EditDocumentDialog } from "@/components/documents/EditDocumentDialog";
 
 async function fetchDocuments(token: string): Promise<DocumentRead[]> {
   const res = await fetch(`${ENV.API_BASE_URL}/documents`, {
@@ -108,359 +42,24 @@ async function fetchDocuments(token: string): Promise<DocumentRead[]> {
   return res.json();
 }
 
-// ── Sensitivity Badge ─────────────────────────────────────────────────────────
-function SensitivityBadge({ level }: { level: number }) {
-  return (
-    <span
-      className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${SENSITIVITY_COLOR[level] ?? "bg-gray-100 text-gray-700"}`}
-    >
-      {SENSITIVITY_LEVEL[level] ?? level}
-    </span>
-  );
-}
-
-// ── OUI Multi-select ──────────────────────────────────────────────────────────
-function OuiMultiSelect({
-  orgUnits,
-  orgUnitInstances,
-  selectedOuiIds,
-  onChange,
-}: {
-  orgUnits: OrgUnit[];
-  orgUnitInstances: OrgUnitInstance[];
-  selectedOuiIds: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  const [expandedOuId, setExpandedOuId] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node))
-        setExpandedOuId(null);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const toggleOui = (id: string) => {
-    onChange(
-      selectedOuiIds.includes(id)
-        ? selectedOuiIds.filter((x) => x !== id)
-        : [...selectedOuiIds, id],
-    );
-  };
-
-  const getOuiLabel = (id: string) => {
-    const oui = orgUnitInstances.find((o) => o.id === id);
-    const ou = orgUnits.find((u) => u.id === oui?.ou_id);
-    return oui ? `${ou?.name ?? ""} / ${oui.name}` : id;
-  };
-
-  // Chỉ hiện OU có ít nhất 1 OUI trong allowed list
-  const visibleOus = orgUnits.filter((ou) =>
-    orgUnitInstances.some((o) => o.ou_id === ou.id),
-  );
-
-  return (
-    <div className="space-y-2" ref={ref}>
-      {/* Selected tags */}
-      {selectedOuiIds.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {selectedOuiIds.map((id) => (
-            <span
-              key={id}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs"
-            >
-              <Building2 className="h-3 w-3" />
-              {getOuiLabel(id)}
-              <button
-                onClick={() => toggleOui(id)}
-                className="hover:text-destructive ml-0.5"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* OU list — mỗi OU là 1 row, nhấn để xổ OUI */}
-      <div className="border rounded-md bg-background divide-y">
-        {visibleOus.length === 0 ? (
-          <p className="text-xs text-muted-foreground px-3 py-2">
-            Không có đơn vị nào
-          </p>
-        ) : (
-          visibleOus.map((ou) => {
-            const ouiList = orgUnitInstances.filter((o) => o.ou_id === ou.id);
-            const isExpanded = expandedOuId === ou.id;
-            const selectedCount = ouiList.filter((o) =>
-              selectedOuiIds.includes(o.id),
-            ).length;
-
-            return (
-              <div key={ou.id}>
-                {/* OU header */}
-                <button
-                  type="button"
-                  className="flex items-center justify-between w-full px-3 py-2 text-sm hover:bg-muted transition-colors"
-                  onClick={() => setExpandedOuId(isExpanded ? null : ou.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-[13.5px]">{ou.name}</span>
-                    {selectedCount > 0 && (
-                      <span className="text-xs bg-primary text-primary-foreground rounded-full px-1.5 py-0.5 leading-none">
-                        {selectedCount}
-                      </span>
-                    )}
-                  </div>
-                  <ChevronDown
-                    className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                  />
-                </button>
-
-                {/* OUI list — chỉ hiện khi expanded */}
-                {isExpanded && (
-                  <div className="bg-muted/30 border-t">
-                    {ouiList.map((oui) => {
-                      const selected = selectedOuiIds.includes(oui.id);
-                      return (
-                        <button
-                          key={oui.id}
-                          type="button"
-                          className="flex items-center w-full px-5 py-1.5 text-sm hover:bg-muted gap-2"
-                          onClick={() => toggleOui(oui.id)}
-                        >
-                          <div
-                            className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-input"}`}
-                          >
-                            {selected && (
-                              <Check className="h-3 w-3 text-white" />
-                            )}
-                          </div>
-                          <span>{oui.name}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── OUI Tree View ─────────────────────────────────────────────────────────────
-interface OuiNode {
-  oui: OrgUnitInstance;
-  children: OuiNode[];
-  docs: DocumentRead[];
-}
-
-function buildOuiTree(ouis: OrgUnitInstance[], docs: DocumentRead[]): OuiNode[] {
-  const nodeMap = new Map<string, OuiNode>();
-  for (const oui of ouis) {
-    nodeMap.set(oui.id, {
-      oui,
-      children: [],
-      docs: docs.filter((d) => d.oui_ids.includes(oui.id)),
-    });
-  }
-  const roots: OuiNode[] = [];
-  for (const oui of ouis) {
-    const node = nodeMap.get(oui.id)!;
-    if (oui.parent_oui_ids.length === 0) {
-      roots.push(node);
-    } else {
-      let placed = false;
-      for (const parentId of oui.parent_oui_ids) {
-        const parent = nodeMap.get(parentId);
-        if (parent) {
-          parent.children.push(node);
-          placed = true;
-        }
-      }
-      if (!placed) roots.push(node);
-    }
-  }
-  return roots;
-}
-
-function countAllDocs(node: OuiNode): number {
-  return node.docs.length + node.children.reduce((s, c) => s + countAllDocs(c), 0);
-}
-
-function OuiTreeNode({
-  node,
-  orgUnits,
-  depth,
-  onView,
-}: {
-  node: OuiNode;
-  orgUnits: OrgUnit[];
-  depth: number;
-  onView: (doc: DocumentRead) => void;
-}) {
-  const [expanded, setExpanded] = useState(depth === 0);
-  const ou = orgUnits.find((u) => u.id === node.oui.ou_id);
-  const totalDocs = countAllDocs(node);
-  const hasChildren = node.children.length > 0 || node.docs.length > 0;
-
-  return (
-    <div className={depth > 0 ? "ml-5 border-l border-border/60" : ""}>
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors"
-      >
-        <ChevronRight
-          className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-150 ${expanded ? "rotate-90" : ""} ${!hasChildren ? "opacity-0" : ""}`}
-        />
-        <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-        <span className="font-medium text-sm">{node.oui.name}</span>
-        {ou && (
-          <span className="text-[11px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
-            {ou.name}
-          </span>
-        )}
-        {totalDocs > 0 && (
-          <span className="ml-auto text-[11px] bg-primary/10 text-primary px-2 py-0.5 rounded-full shrink-0">
-            {totalDocs}
-          </span>
-        )}
-      </button>
-
-      {expanded && (
-        <div>
-          {node.children.map((child) => (
-            <OuiTreeNode
-              key={child.oui.id}
-              node={child}
-              orgUnits={orgUnits}
-              depth={depth + 1}
-              onView={onView}
-            />
-          ))}
-          {node.docs.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex items-center gap-2.5 pl-10 pr-3 py-1.5 hover:bg-muted/30 transition-colors"
-            >
-              <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <button
-                onClick={() => onView(doc)}
-                className="text-sm text-foreground hover:text-primary transition-colors flex-1 text-left line-clamp-1"
-              >
-                {doc.title}
-              </button>
-              <SensitivityBadge level={doc.sensitivity} />
-              <StatusBadge status={doc.status as DocumentStatus} />
-            </div>
-          ))}
-          {node.docs.length === 0 && node.children.length === 0 && (
-            <p className="pl-10 py-1.5 text-xs text-muted-foreground">
-              Không có tài liệu
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TreeView({
-  documents,
-  orgUnits,
-  orgUnitInstances,
-  onView,
-}: {
-  documents: DocumentRead[];
-  orgUnits: OrgUnit[];
-  orgUnitInstances: OrgUnitInstance[];
-  onView: (doc: DocumentRead) => void;
-}) {
-  const roots = useMemo(
-    () => buildOuiTree(orgUnitInstances, documents),
-    [orgUnitInstances, documents],
-  );
-
-  const unassigned = useMemo(
-    () => documents.filter((d) => d.oui_ids.length === 0),
-    [documents],
-  );
-
-  if (roots.length === 0 && unassigned.length === 0) {
-    return (
-      <div className="flex flex-col items-center text-muted-foreground gap-2 py-16">
-        <Network className="h-12 w-12 text-muted" />
-        <p className="text-sm">Chưa có cơ cấu tổ chức</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden divide-y divide-border/50">
-      {roots.map((node) => (
-        <OuiTreeNode
-          key={node.oui.id}
-          node={node}
-          orgUnits={orgUnits}
-          depth={0}
-          onView={onView}
-        />
-      ))}
-      {unassigned.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">
-            <FileText className="h-4 w-4 shrink-0" />
-            <span className="font-medium">Chưa phân loại</span>
-            <span className="text-[11px] bg-muted px-2 py-0.5 rounded-full">{unassigned.length}</span>
-          </div>
-          {unassigned.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex items-center gap-2.5 pl-10 pr-3 py-1.5 hover:bg-muted/30 transition-colors"
-            >
-              <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <button
-                onClick={() => onView(doc)}
-                className="text-sm text-foreground hover:text-primary transition-colors flex-1 text-left line-clamp-1"
-              >
-                {doc.title}
-              </button>
-              <SensitivityBadge level={doc.sensitivity} />
-              <StatusBadge status={doc.status as DocumentStatus} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 export default function DocumentsPage() {
   const { token, user, isCorpMember, maxClearance } = useAuth();
 
+  // Data state
   const [documents, setDocuments] = useState<DocumentRead[]>([]);
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
-  const [orgUnitInstances, setOrgUnitInstances] = useState<OrgUnitInstance[]>(
-    [],
-  );
+  const [orgUnitInstances, setOrgUnitInstances] = useState<OrgUnitInstance[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [docsRefresh, setDocsRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState("all");
 
+  // Edit dialog state
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [editSensitivity, setEditSensitivity] = useState<number>(2);
   const [editOuiIds, setEditOuiIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
-  // Upload dialog
+  // Upload dialog state
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [uploadOuiIds, setUploadOuiIds] = useState<string[]>([]);
   const [uploadSensitivity, setUploadSensitivity] = useState<number>(2);
@@ -468,12 +67,10 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Upload version dialog
+  // Upload version dialog state
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [versionTarget, setVersionTarget] = useState<DocumentRead | null>(null);
-  const [selectedVersionFile, setSelectedVersionFile] = useState<File | null>(
-    null,
-  );
+  const [selectedVersionFile, setSelectedVersionFile] = useState<File | null>(null);
   const [uploadingVersion, setUploadingVersion] = useState(false);
   const fileVersionInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -486,35 +83,24 @@ export default function DocumentsPage() {
   const canEdit = (user?.oui_positions.length ?? 0) > 0;
   const canDelete = isCorpMember;
 
+  // BFS over the OUI tree to collect all OUI IDs accessible to this user.
   const allowedOuiIds = useMemo(() => {
-    console.log("user oui_positions:", user?.oui_positions);
-    console.log("isCorpMember:", isCorpMember);
-    console.log("orgUnitInstances count:", orgUnitInstances.length);
-
     if (!user || orgUnitInstances.length === 0) return new Set<string>();
-
-    if (isCorpMember) {
-      return new Set(orgUnitInstances.map((o) => o.id));
-    }
-
+    if (isCorpMember) return new Set(orgUnitInstances.map((o) => o.id));
     const userOuiIds = new Set(user.oui_positions.map((p) => p.oui_id));
     const allowed = new Set<string>(userOuiIds);
     const queue = [...userOuiIds];
-
     while (queue.length > 0) {
       const currentId = queue.shift()!;
       orgUnitInstances
         .filter((o) => o.parent_oui_ids.includes(currentId))
         .forEach((child) => {
-          console.log(`Found child of ${currentId}:`, child.name, child.id);
           if (!allowed.has(child.id)) {
             allowed.add(child.id);
             queue.push(child.id);
           }
         });
     }
-
-    console.log("allowed OUI ids:", [...allowed]);
     return allowed;
   }, [user, isCorpMember, orgUnitInstances]);
 
@@ -522,6 +108,13 @@ export default function DocumentsPage() {
     () => orgUnitInstances.filter((o) => allowedOuiIds.has(o.id)),
     [orgUnitInstances, allowedOuiIds],
   );
+
+  const myDocuments = useMemo(
+    () => documents.filter((d) => d.owner_user_id === user?.id),
+    [documents, user?.id],
+  );
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
   const openEdit = (doc: DocumentRead) => {
     setEditingDocId(doc.id);
@@ -548,93 +141,6 @@ export default function DocumentsPage() {
     }
   };
 
-  // ── Load data ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    setLoadingDocs(true);
-    fetchDocuments(token)
-      .then(async (docs) => {
-        setDocuments(docs);
-        if (isCorpMember) return; // admin không cần check chunk restriction
-        // Fetch access status song song cho tất cả docs để biết cái nào có chunk restricted
-        const results = await Promise.allSettled(
-          docs.map((d) => getDocumentAccessStatus(d.id, token)),
-        );
-        const restricted = new Set<string>();
-        results.forEach((r, i) => {
-          if (r.status === "fulfilled" && r.value.has_restricted_chunks) {
-            restricted.add(docs[i].id);
-          }
-        });
-        setRestrictedDocIds(restricted);
-      })
-      .catch(() =>
-        toast({ variant: "destructive", title: "Không thể tải tài liệu" }),
-      )
-      .finally(() => setLoadingDocs(false));
-  }, [docsRefresh, isCorpMember]);
-
-  useEffect(() => {
-    fetchOrgUnits(token)
-      .then(setOrgUnits)
-      .catch(() => {});
-    fetchOrgUnitInstances(token)
-      .then(setOrgUnitInstances)
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    fetchMyAccessRequests(token)
-      .then((reqs) => {
-        const map = new Map<string, AccessRequestRead>();
-        for (const r of reqs) {
-          const existing = map.get(r.document_id);
-          if (!existing || new Date(r.created_at) > new Date(existing.created_at)) {
-            map.set(r.document_id, r);
-          }
-        }
-        setAccessRequestMap(map);
-      })
-      .catch(() => {});
-  }, [docsRefresh]);
-
-  const handleRequestAccess = async (doc: DocumentRead) => {
-    setRequestingDocId(doc.id);
-    try {
-      const req = await createAccessRequest(doc.id, token);
-      setAccessRequestMap((prev) => new Map(prev).set(doc.id, req));
-      toast({ variant: "success", title: "Đã gửi yêu cầu xem tài liệu" });
-    } catch (err: any) {
-      const msg = err?.message ?? "";
-      if (msg.includes("409") || msg.toLowerCase().includes("pending")) {
-        toast({ variant: "destructive", title: "Đã có yêu cầu đang chờ xử lý" });
-      } else {
-        toast({ variant: "destructive", title: "Không thể gửi yêu cầu", description: msg });
-      }
-    } finally {
-      setRequestingDocId(null);
-    }
-  };
-
-  const myDocuments = useMemo(
-    () => documents.filter((d) => d.owner_user_id === user?.id),
-    [documents, user?.id],
-  );
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
-  const getOuiLabel = (ouiId: string) => {
-    const oui = orgUnitInstances.find((o) => o.id === ouiId);
-    const ou = orgUnits.find((u) => u.id === oui?.ou_id);
-    return oui ? `${ou?.name ?? ""} / ${oui.name}` : ouiId.slice(0, 8);
-  };
-
-  const formatDate = (s: string) =>
-    new Date(s).toLocaleDateString("vi-VN", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-
-  // ── Upload ─────────────────────────────────────────────────────────────────
   const resetUploadForm = () => {
     setUploadOuiIds([]);
     setUploadSensitivity(2);
@@ -646,13 +152,9 @@ export default function DocumentsPage() {
     setUploading(true);
     try {
       const title = selectedFile.name.replace(/\.[^.]+$/, "");
+      const document_type = extFromFileName(selectedFile.name);
       const doc = await createDocument(
-        {
-          title,
-          oui_ids: uploadOuiIds,
-          sensitivity: uploadSensitivity,
-          data_type: "file",
-        },
+        { title, oui_ids: uploadOuiIds, sensitivity: uploadSensitivity, data_type: "file", document_type },
         token,
       );
       await uploadDocumentVersion(doc.id, selectedFile, token);
@@ -662,11 +164,7 @@ export default function DocumentsPage() {
       resetUploadForm();
       setDocsRefresh((n) => n + 1);
     } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Tải lên thất bại",
-        description: err?.message,
-      });
+      toast({ variant: "destructive", title: "Tải lên thất bại", description: err?.message });
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -692,11 +190,7 @@ export default function DocumentsPage() {
       toast({ variant: "success", title: "Đã xóa" });
       setDocsRefresh((n) => n + 1);
     } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Xóa thất bại",
-        description: err.message,
-      });
+      toast({ variant: "destructive", title: "Xóa thất bại", description: err.message });
     }
   };
 
@@ -711,285 +205,106 @@ export default function DocumentsPage() {
       setSelectedVersionFile(null);
       setDocsRefresh((n) => n + 1);
     } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Thất bại",
-        description: err?.message,
-      });
+      toast({ variant: "destructive", title: "Thất bại", description: err?.message });
     } finally {
       setUploadingVersion(false);
       if (fileVersionInputRef.current) fileVersionInputRef.current.value = "";
     }
   };
 
-  // ── Table ──────────────────────────────────────────────────────────────────
-  const renderTable = (docs: DocumentRead[], showOwner = false) => (
-    <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-[28%] text-xs font-bold text-muted-foreground uppercase tracking-wide">
-              Tên tài liệu
-            </TableHead>
-            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Đơn vị</TableHead>
-            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Độ nhạy</TableHead>
-            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-              Trạng thái
-            </TableHead>
-            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-              Phiên bản
-            </TableHead>
-            {showOwner && (
-              <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-                Người sở hữu
-              </TableHead>
-            )}
-            <TableHead className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-              Cập nhật
-            </TableHead>
-            <TableHead className="w-12" />
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loadingDocs ? (
-            <TableRow>
-              <TableCell
-                colSpan={7}
-                className="h-32 text-center text-muted-foreground"
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                  <span className="text-sm">Đang tải...</span>
-                </div>
-              </TableCell>
-            </TableRow>
-          ) : docs.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={7} className="h-32 text-center">
-                <div className="flex flex-col items-center text-muted-foreground gap-2">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-                    <FileText className="h-6 w-6" />
-                  </div>
-                  <p className="text-sm">Không tìm thấy tài liệu nào</p>
-                </div>
-              </TableCell>
-            </TableRow>
-          ) : (
-            docs.map((doc) => (
-              <TableRow key={doc.id} className="hover:bg-muted/30 transition-colors">
-                <TableCell>
-                  <button
-                    onClick={() => handleView(doc)}
-                    className="font-semibold text-foreground hover:text-primary transition-colors text-left line-clamp-1"
-                  >
-                    {doc.title}
-                  </button>
-                </TableCell>
+  const handleRequestAccess = async (doc: DocumentRead) => {
+    setRequestingDocId(doc.id);
+    try {
+      const req = await createAccessRequest(doc.id, token);
+      setAccessRequestMap((prev) => new Map(prev).set(doc.id, req));
+      toast({ variant: "success", title: "Đã gửi yêu cầu xem tài liệu" });
+    } catch (err: any) {
+      const msg = err?.message ?? "";
+      if (msg.includes("409") || msg.toLowerCase().includes("pending")) {
+        toast({ variant: "destructive", title: "Đã có yêu cầu đang chờ xử lý" });
+      } else {
+        toast({ variant: "destructive", title: "Không thể gửi yêu cầu", description: msg });
+      }
+    } finally {
+      setRequestingDocId(null);
+    }
+  };
 
-                {/* OUI badges */}
-                <TableCell>
-                  <div className="flex flex-wrap gap-1">
-                    {doc.oui_ids.length === 0 ? (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    ) : (
-                      doc.oui_ids.slice(0, 2).map((id) => (
-                        <Badge
-                          key={id}
-                          variant="secondary"
-                          className="font-normal text-xs"
-                        >
-                          {getOuiLabel(id)}
-                        </Badge>
-                      ))
-                    )}
-                    {doc.oui_ids.length > 2 && (
-                      <Badge variant="outline" className="text-xs">
-                        +{doc.oui_ids.length - 2}
-                      </Badge>
-                    )}
-                  </div>
-                </TableCell>
+  // ── Effects ────────────────────────────────────────────────────────────────
 
-                <TableCell>
-                  <div className="flex items-center gap-1.5">
-                    <SensitivityBadge level={doc.sensitivity} />
-                    {restrictedDocIds.has(doc.id) && (() => {
-                      const ar = accessRequestMap.get(doc.id);
-                      if (!ar) return <Lock className="h-3.5 w-3.5 text-destructive" title="Bạn không có quyền xem toàn bộ tài liệu này" />;
-                      if (ar.status === "pending") return <Clock className="h-3.5 w-3.5 text-amber-500" title="Đang chờ phê duyệt" />;
-                      if (ar.status === "approved" && (ar.expires_at === null || new Date(ar.expires_at) > new Date())) return <CountdownTimer expiresAt={ar.expires_at} compact />;
-                      if (ar.status === "rejected") return <ShieldX className="h-3.5 w-3.5 text-destructive" title="Yêu cầu bị từ chối" />;
-                      return <Lock className="h-3.5 w-3.5 text-destructive" title="Quyền truy cập đã hết hạn" />;
-                    })()}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={doc.status as DocumentStatus} />
-                </TableCell>
-                <TableCell className="font-mono text-sm text-muted-foreground">
-                  v{doc.version_count}
-                </TableCell>
+  // Load documents and detect chunk-restricted docs for non-corp users.
+  useEffect(() => {
+    setLoadingDocs(true);
+    fetchDocuments(token)
+      .then((docs) => {
+        setDocuments(docs);
+        // Load access status in background — don't block document list render.
+        if (isCorpMember) return;
+        Promise.allSettled(
+          docs.map((d) => getDocumentAccessStatus(d.id, token)),
+        ).then((results) => {
+          const restricted = new Set<string>();
+          results.forEach((r, i) => {
+            if (r.status === "fulfilled" && r.value.has_restricted_chunks)
+              restricted.add(docs[i].id);
+          });
+          setRestrictedDocIds(restricted);
+        });
+      })
+      .catch(() => toast({ variant: "destructive", title: "Không thể tải tài liệu" }))
+      .finally(() => setLoadingDocs(false));
+  }, [docsRefresh, isCorpMember]);
 
-                {showOwner && (
-                  <TableCell className="text-xs text-muted-foreground font-mono">
-                    {doc.owner_user_id.slice(0, 8)}…
-                  </TableCell>
-                )}
+  // Load org units and instances once on mount.
+  useEffect(() => {
+    fetchOrgUnits(token).then(setOrgUnits).catch(() => {});
+    fetchOrgUnitInstances(token).then(setOrgUnitInstances).catch(() => {});
+  }, []);
 
-                <TableCell className="text-muted-foreground text-xs">
-                  {formatDate(doc.updated_at)}
-                </TableCell>
+  // Sync access request map with the latest requests after any data refresh.
+  useEffect(() => {
+    fetchMyAccessRequests(token)
+      .then((reqs) => {
+        const map = new Map<string, AccessRequestRead>();
+        for (const r of reqs) {
+          const existing = map.get(r.document_id);
+          if (
+            !existing ||
+            new Date(r.created_at) > new Date(existing.created_at)
+          )
+            map.set(r.document_id, r);
+        }
+        setAccessRequestMap(map);
+      })
+      .catch(() => {});
+  }, [docsRefresh]);
 
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-52">
-                      <DropdownMenuItem onClick={() => handleView(doc)}>
-                        <Eye className="mr-2 h-4 w-4" /> Xem
-                      </DropdownMenuItem>
-                      {restrictedDocIds.has(doc.id) && (() => {
-                        const ar = accessRequestMap.get(doc.id);
-                        const isPending = ar?.status === "pending";
-                        const isApproved = ar?.status === "approved" && (ar.expires_at === null || new Date(ar.expires_at) > new Date());
-                        return (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              disabled={isPending || isApproved || requestingDocId === doc.id}
-                              onClick={() => handleRequestAccess(doc)}
-                            >
-                              <Lock className="mr-2 h-4 w-4" />
-                              {isPending ? "Đang chờ phê duyệt" : isApproved ? "Đã được phê duyệt" : ar?.status === "approved" ? "Gia hạn quyền truy cập" : "Yêu cầu xem tài liệu"}
-                            </DropdownMenuItem>
-                          </>
-                        );
-                      })()}
-                      {isCorpMember && (
-                        <DropdownMenuItem onClick={() => openEdit(doc)}>
-                          <Pencil className="mr-2 h-4 w-4" /> Chỉnh sửa
-                        </DropdownMenuItem>
-                      )}
-                      {canEdit && (
-                        <>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setVersionTarget(doc);
-                              setSelectedVersionFile(null);
-                              setVersionDialogOpen(true);
-                            }}
-                          >
-                            <Upload className="mr-2 h-4 w-4" /> Tải lên phiên
-                            bản mới
-                          </DropdownMenuItem>
-                          {canDelete && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => handleDelete(doc)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" /> Xóa
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-    </div>
-  );
+  // ── Shared table props ─────────────────────────────────────────────────────
 
-  // ── Tab content ────────────────────────────────────────────────────────────
-  const TabContent = ({
-    docs,
-    showOwner,
-  }: {
-    docs: DocumentRead[];
-    showOwner: boolean;
-  }) => {
-    const [search, setSearch] = useState("");
-    const [statusFilter, setStatusFilter] = useState("all");
-    const [sensitivityFilter, setSensitivityFilter] = useState("all");
-
-    const filtered = useMemo(
-      () =>
-        docs.filter((d) => {
-          const matchSearch =
-            !search || d.title.toLowerCase().includes(search.toLowerCase());
-          const matchStatus =
-            statusFilter === "all" || d.status === statusFilter;
-          const matchSens =
-            sensitivityFilter === "all" ||
-            String(d.sensitivity) === sensitivityFilter;
-          return matchSearch && matchStatus && matchSens;
-        }),
-      [docs, search, statusFilter, sensitivityFilter],
-    );
-
-    return (
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm kiếm tài liệu..."
-              className="pl-9 h-9 placeholder:text-[12.5px] rounded-lg"
-            />
-          </div>
-          <div className="h-6 w-px bg-border" />
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="h-9 w-auto px-3 text-[12.5px]">
-              <SelectValue placeholder="Trạng thái" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả trạng thái</SelectItem>
-              <SelectItem value="approved">Đã duyệt</SelectItem>
-              <SelectItem value="review">Đang xem xét</SelectItem>
-              <SelectItem value="draft">Nháp</SelectItem>
-              <SelectItem value="uploaded">Đã tải lên</SelectItem>
-              <SelectItem value="archived">Lưu trữ</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={sensitivityFilter}
-            onValueChange={setSensitivityFilter}
-          >
-            <SelectTrigger className="h-9 w-auto px-3 text-[12.5px]">
-              <SelectValue placeholder="Độ nhạy" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả mức độ</SelectItem>
-              {Object.entries(SENSITIVITY_LEVEL)
-                .filter(([k]) => Number(k) <= maxClearance)
-                .map(([k, v]) => (
-                  <SelectItem key={k} value={k}>
-                    {v}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {renderTable(filtered, showOwner)}
-        <p className="text-sm text-muted-foreground ml-1">
-          Đang hiển thị {filtered.length} trong số {docs.length} tài liệu
-        </p>
-      </div>
-    );
+  // Props forwarded to every DocumentTable instance via DocTabContent.
+  const tableProps: DocumentTableBaseProps = {
+    loading: loadingDocs,
+    orgUnits,
+    orgUnitInstances,
+    restrictedDocIds,
+    accessRequestMap,
+    requestingDocId,
+    isCorpMember,
+    canEdit,
+    canDelete,
+    onView: handleView,
+    onEdit: openEdit,
+    onDelete: handleDelete,
+    onUploadVersion: (doc) => {
+      setVersionTarget(doc);
+      setSelectedVersionFile(null);
+      setVersionDialogOpen(true);
+    },
+    onRequestAccess: handleRequestAccess,
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader
@@ -998,7 +313,7 @@ export default function DocumentsPage() {
         actions={
           canEdit && (
             <Button
-              className="gap-2"
+              className="gap-2 bg-black text-white hover:bg-gray-700 focus:ring-gray-400"
               onClick={() => {
                 resetUploadForm();
                 setUploadDialogOpen(true);
@@ -1029,11 +344,21 @@ export default function DocumentsPage() {
               </TabsTrigger>
             </TabsList>
           </div>
+
           <TabsContent value="all" className="flex-1 p-6 mt-0">
-            <TabContent docs={documents} showOwner={true} />
+            <DocTabContent
+              docs={documents}
+              showOwner
+              maxClearance={maxClearance}
+              {...tableProps}
+            />
           </TabsContent>
           <TabsContent value="mine" className="flex-1 p-6 mt-0">
-            <TabContent docs={myDocuments} showOwner={false} />
+            <DocTabContent
+              docs={myDocuments}
+              maxClearance={maxClearance}
+              {...tableProps}
+            />
           </TabsContent>
           <TabsContent value="tree" className="flex-1 p-6 mt-0">
             <TreeView
@@ -1043,11 +368,10 @@ export default function DocumentsPage() {
               onView={handleView}
             />
           </TabsContent>
-
         </Tabs>
       </div>
 
-      {/* Hidden inputs */}
+      {/* Hidden file inputs — triggers are inside the dialogs. */}
       <input
         ref={fileInputRef}
         type="file"
@@ -1061,114 +385,27 @@ export default function DocumentsPage() {
         onChange={(e) => setSelectedVersionFile(e.target.files?.[0] ?? null)}
       />
 
-      {/* Upload Dialog */}
-      <Dialog
+      <UploadDialog
         open={uploadDialogOpen}
         onOpenChange={(o) => {
           setUploadDialogOpen(o);
           if (!o) resetUploadForm();
         }}
-      >
-        <DialogContent className="sm:max-w-[540px]">
-          <DialogHeader>
-            <DialogTitle>Tải lên tài liệu</DialogTitle>
-            <DialogDescription className="text-[12.5px]">
-              Chọn file và điền thông tin để tải lên tài liệu mới.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-2">
-            {/* OUI multi-select */}
-            <div className="grid gap-2">
-              <Label className="text-xs text-muted-foreground">
-                Đơn vị tổ chức
-              </Label>
-              <OuiMultiSelect
-                orgUnits={orgUnits}
-                orgUnitInstances={allowedOrgUnitInstances}
-                selectedOuiIds={uploadOuiIds}
-                onChange={setUploadOuiIds}
-              />
-            </div>
+        orgUnits={orgUnits}
+        allowedOrgUnitInstances={allowedOrgUnitInstances}
+        maxClearance={maxClearance}
+        uploadOuiIds={uploadOuiIds}
+        setUploadOuiIds={setUploadOuiIds}
+        uploadSensitivity={uploadSensitivity}
+        setUploadSensitivity={setUploadSensitivity}
+        selectedFile={selectedFile}
+        setSelectedFile={setSelectedFile}
+        uploading={uploading}
+        onUpload={handleUpload}
+        fileInputRef={fileInputRef}
+      />
 
-            {/* Sensitivity */}
-            <div className="grid gap-2">
-              <Label className="text-xs text-muted-foreground">
-                Độ nhạy cảm
-              </Label>
-              <Select
-                value={String(uploadSensitivity)}
-                onValueChange={(v) => setUploadSensitivity(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SENSITIVITY_LEVEL)
-                    .filter(([k]) => Number(k) <= maxClearance)
-                    .map(([k, v]) => (
-                      <SelectItem key={k} value={k}>
-                        {v}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* File */}
-            <div className="grid gap-2">
-              <Label className="text-xs text-muted-foreground">File</Label>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  className="text-[13px]"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Chọn file
-                </Button>
-                <span className="text-sm text-muted-foreground truncate max-w-[240px]">
-                  {selectedFile?.name ?? "Chưa chọn file"}
-                </span>
-                {selectedFile && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                    }}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-              {selectedFile && (
-                <p className="text-xs text-muted-foreground">
-                  {(selectedFile.size / 1024).toFixed(1)} KB ·{" "}
-                  {selectedFile.type || "unknown"}
-                </p>
-              )}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setUploadDialogOpen(false)}
-            >
-              Hủy
-            </Button>
-            <Button
-              disabled={!selectedFile || uploading}
-              onClick={handleUpload}
-            >
-              {uploading ? "Đang tải lên..." : "Tải lên"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Upload Version Dialog */}
-      <Dialog
+      <UploadVersionDialog
         open={versionDialogOpen}
         onOpenChange={(o) => {
           setVersionDialogOpen(o);
@@ -1177,184 +414,28 @@ export default function DocumentsPage() {
             setSelectedVersionFile(null);
           }
         }}
-      >
-        <DialogContent className="sm:max-w-[480px]">
-          <DialogHeader>
-            <DialogTitle>Tải lên phiên bản mới</DialogTitle>
-            <DialogDescription className="text-[12px]">
-              Lịch sử phiên bản vẫn được lưu lại.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-2">
-            {versionTarget && (
-              <div className="rounded-md border p-3 bg-muted/40">
-                <p className="font-medium text-sm">{versionTarget.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Phiên bản hiện tại: v{versionTarget.version_count}
-                </p>
-              </div>
-            )}
-            <div className="grid gap-2">
-              <Label>File</Label>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  className="text-[12px]"
-                  onClick={() => fileVersionInputRef.current?.click()}
-                >
-                  Chọn file
-                </Button>
-                <span className="text-[12px] text-muted-foreground truncate max-w-[220px]">
-                  {selectedVersionFile?.name ?? "Chưa chọn file"}
-                </span>
-                {selectedVersionFile && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0"
-                    onClick={() => {
-                      setSelectedVersionFile(null);
-                      if (fileVersionInputRef.current)
-                        fileVersionInputRef.current.value = "";
-                    }}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setVersionDialogOpen(false)}
-            >
-              Hủy
-            </Button>
-            <Button
-              disabled={!selectedVersionFile || uploadingVersion}
-              onClick={handleUploadVersion}
-            >
-              {uploadingVersion ? "Đang tải lên..." : "Tải lên"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        versionTarget={versionTarget}
+        selectedVersionFile={selectedVersionFile}
+        setSelectedVersionFile={setSelectedVersionFile}
+        uploadingVersion={uploadingVersion}
+        onUploadVersion={handleUploadVersion}
+        fileVersionInputRef={fileVersionInputRef}
+      />
 
-      {/* Edit Dialog — chỉ corp member */}
-      <Dialog
+      <EditDocumentDialog
         open={!!editingDocId}
         onOpenChange={(o) => {
           if (!o) setEditingDocId(null);
         }}
-      >
-        <DialogContent className="sm:max-w-[540px]">
-          <DialogHeader>
-            <DialogTitle>Chỉnh sửa tài liệu</DialogTitle>
-            <DialogDescription className="text-[12.5px]">
-              Thay đổi đơn vị tổ chức và độ nhạy cảm của tài liệu.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid gap-2">
-              <Label className="text-xs text-muted-foreground">
-                Đơn vị tổ chức
-              </Label>
-              <OuiMultiSelect
-                orgUnits={orgUnits}
-                orgUnitInstances={orgUnitInstances}
-                selectedOuiIds={editOuiIds}
-                onChange={setEditOuiIds}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label className="text-xs text-muted-foreground">
-                Độ nhạy cảm
-              </Label>
-              <Select
-                value={String(editSensitivity)}
-                onValueChange={(v) => setEditSensitivity(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(SENSITIVITY_LEVEL).map(([k, v]) => (
-                    <SelectItem key={k} value={k}>
-                      {v}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingDocId(null)}>
-              Hủy
-            </Button>
-            <Button disabled={saving} onClick={handleSaveEdit}>
-              {saving ? "Đang lưu..." : "Lưu"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        orgUnits={orgUnits}
+        orgUnitInstances={orgUnitInstances}
+        editOuiIds={editOuiIds}
+        setEditOuiIds={setEditOuiIds}
+        editSensitivity={editSensitivity}
+        setEditSensitivity={setEditSensitivity}
+        saving={saving}
+        onSave={handleSaveEdit}
+      />
     </div>
   );
 }
-
-// ── Countdown timer component ─────────────────────────────────────────────────
-export function CountdownTimer({ expiresAt, compact = false }: { expiresAt: string | null; compact?: boolean }) {
-  const [remaining, setRemaining] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!expiresAt) return;
-    const update = () => setRemaining(Math.max(0, new Date(expiresAt).getTime() - Date.now()));
-    update();
-    const id = setInterval(update, 1000);
-    return () => clearInterval(id);
-  }, [expiresAt]);
-
-  if (!expiresAt) {
-    return compact ? (
-      <span className="inline-flex items-center gap-0.5 text-green-600 text-[11px] font-medium">
-        <Infinity className="h-3 w-3" />
-      </span>
-    ) : (
-      <span className="inline-flex items-center gap-1 text-green-600 font-medium text-sm">
-        <Infinity className="h-3.5 w-3.5" /> Vĩnh viễn
-      </span>
-    );
-  }
-  if (remaining === null) return null;
-  if (remaining === 0) {
-    return <span className={`text-destructive font-medium ${compact ? "text-[11px]" : "text-sm"}`}>Hết hạn</span>;
-  }
-
-  const totalSecs = Math.floor(remaining / 1000);
-  const days  = Math.floor(totalSecs / 86400);
-  const hours = Math.floor((totalSecs % 86400) / 3600);
-  const mins  = Math.floor((totalSecs % 3600) / 60);
-  const secs  = totalSecs % 60;
-
-  const parts: string[] = [];
-  if (!compact) {
-    if (days  > 0) parts.push(`${days}n`);
-    if (hours > 0) parts.push(`${hours}g`);
-    if (mins  > 0) parts.push(`${mins}p`);
-    parts.push(`${String(secs).padStart(2, "0")}s`);
-  } else {
-    // compact: chỉ hiện đơn vị lớn nhất + đơn vị nhỏ hơn
-    if (days  > 0) parts.push(`${days}n${hours}g`);
-    else if (hours > 0) parts.push(`${hours}g${String(mins).padStart(2, "0")}p`);
-    else parts.push(`${mins}p${String(secs).padStart(2, "0")}s`);
-  }
-
-  const color = totalSecs < 3600 ? "text-destructive" : totalSecs < 86400 ? "text-amber-500" : "text-green-600";
-
-  return (
-    <span className={`font-mono font-semibold tabular-nums ${compact ? "text-[11px]" : "text-sm"} ${color}`}>
-      {parts.join(" ")}
-    </span>
-  );
-}
-

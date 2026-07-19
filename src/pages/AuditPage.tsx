@@ -1,3 +1,4 @@
+/** AuditPage: two-tab audit console for query-trace logs and background-job monitoring. */
 import { useState, useEffect } from "react";
 import {
   Search,
@@ -10,6 +11,11 @@ import {
   Clock,
   Loader2,
   XCircle,
+  Activity,
+  TrendingUp,
+  TrendingDown,
+  RefreshCw,
+  Timer,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -39,6 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/date";
 import {
   fetchTraces,
   fetchJobs,
@@ -48,14 +55,68 @@ import {
   JobRecord,
 } from "@/services/audit.api";
 
-// ── helpers ───────────────────────────────────────────────────────────────────
+// Truncate a long string to head...tail form for compact display.
 const truncateMiddle = (s: string, head = 6, tail = 4) =>
   s.length <= head + tail + 3 ? s : `${s.slice(0, head)}...${s.slice(-tail)}`;
 
-const formatDate = (s?: string | null) =>
-  s ? new Date(s).toLocaleString("vi-VN") : "—";
+// Extract the total latency in milliseconds from a trace's timings object.
+const getLatency = (timings: any): string => {
+  if (!timings) return "—";
+  const total = timings.total_ms ?? timings.total ?? null;
+  return total != null ? `${Math.round(total)}ms` : "—";
+};
 
-// ── page ─────────────────────────────────────────────────────────────────────
+// Count unique document IDs referenced in a retrieved-sources array.
+const getDocs = (sources: any[]): number => {
+  if (!Array.isArray(sources)) return 0;
+  return new Set(sources.map((s) => s.metadata?.document_id).filter(Boolean))
+    .size;
+};
+
+// Count total citation chunks in a retrieved-sources array.
+const getCitations = (sources: any[]): number =>
+  Array.isArray(sources) ? sources.length : 0;
+
+// Shorten a UUID-like job ID to a compact head...tail representation.
+const shortId = (id: string) =>
+  id.length > 10 ? `${id.slice(0, 6)}...${id.slice(-4)}` : id;
+
+// Render a job's document title with an optional version badge.
+const formatDocLabel = (job: JobRecord) => {
+  const title = job.doc_title ?? job.document_id ?? "";
+  const ver = job.version_no != null ? job.version_no : null;
+  return (
+    <span className="text-[12.5px]">
+      {title}
+      {ver != null && (
+        <code className="ml-1 text-muted-foreground font-mono font-bold">
+          (v{ver})
+        </code>
+      )}
+    </span>
+  );
+};
+
+// Human-readable labels for job statuses.
+const statusLabels: Record<string, string> = {
+  queued: "Hàng đợi",
+  running: "Đang chạy",
+  succeeded: "Thành công",
+  failed: "Thất bại",
+};
+
+// Color classes for job stat counters keyed by status.
+const statColors: Record<string, { text: string; count: string }> = {
+  queued: { text: "text-muted-foreground", count: "text-muted-foreground" },
+  running: { text: "text-yellow-500", count: "text-yellow-600" },
+  succeeded: { text: "text-green-600", count: "text-green-700" },
+  failed: { text: "text-red-500", count: "text-red-700" },
+};
+
+// The four job status values used to render stat cards and filter the table.
+const JOB_STATUSES = ["queued", "running", "succeeded", "failed"] as const;
+
+// Thin shell: renders the page header and delegates content to QueryLogsTab and JobsTab.
 export default function AuditPage() {
   return (
     <div className="flex h-full flex-col">
@@ -87,7 +148,7 @@ export default function AuditPage() {
   );
 }
 
-// ── Query Logs ────────────────────────────────────────────────────────────────
+// Tab displaying a filterable, searchable table of query traces.
 function QueryLogsTab() {
   const { token } = useAuth();
   const [traces, setTraces] = useState<TraceRecord[]>([]);
@@ -96,6 +157,7 @@ function QueryLogsTab() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Fetch all traces on mount.
   useEffect(() => {
     fetchTraces(token)
       .then(setTraces)
@@ -105,6 +167,7 @@ function QueryLogsTab() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Traces matching the current search query and status filter.
   const filtered = traces.filter((t) => {
     const q = searchQuery.toLowerCase();
     const matchSearch =
@@ -115,59 +178,173 @@ function QueryLogsTab() {
     return matchSearch && matchStatus;
   });
 
-  const copyTraceId = (id: string) => {
-    navigator.clipboard.writeText(id);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
+  // Icon + label + className lookup for each trace status value.
   const statusConfig: Record<
     string,
     { icon: React.ReactNode; label: string; className: string }
   > = {
     completed: {
       icon: <CheckCircle className="h-4 w-4 text-green-600" />,
-      label: "Completed",
+      label: "Hoàn thành",
       className:
         "bg-green-100 text-green-700 border border-green-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
     },
     "no-permission": {
       icon: <ShieldX className="h-4 w-4 text-red-600" />,
-      label: "No Permission",
+      label: "Không có quyền",
       className:
         "bg-red-100 text-red-700 border border-red-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
     },
     "no-answer": {
       icon: <AlertTriangle className="h-4 w-4 text-yellow-600" />,
-      label: "No Answer",
+      label: "Không có kết quả",
       className:
         "bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
     },
     blocked: {
       icon: <AlertTriangle className="h-4 w-4 text-red-600" />,
-      label: "Blocked",
+      label: "Bị chặn",
       className:
         "bg-red-100 text-red-700 border border-red-200 rounded-full px-2.5 py-0.5 text-xs font-medium",
     },
   };
 
-  const getLatency = (timings: any): string => {
-    if (!timings) return "—";
-    const total = timings.total_ms ?? timings.total ?? null;
-    return total != null ? `${Math.round(total)}ms` : "—";
+  // Copy a trace ID to the clipboard and show a temporary checkmark for 2 s.
+  const copyTraceId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const getDocs = (sources: any[]): number => {
-    if (!Array.isArray(sources)) return 0;
-    return new Set(sources.map((s) => s.metadata?.document_id).filter(Boolean))
-      .size;
-  };
+  // Compute stats from all traces (not just filtered)
+  const total = traces.length;
+  const completedCount = traces.filter((t) => t.status === "completed").length;
+  const runningCount = traces.filter((t) => t.status === "running").length;
+  const errorCount = traces.filter((t) =>
+    ["blocked", "no-answer", "no-permission"].includes(t.status),
+  ).length;
 
-  const getCitations = (sources: any[]): number =>
-    Array.isArray(sources) ? sources.length : 0;
+  // % change vs last week
+  const now = Date.now();
+  const oneWeek = 7 * 24 * 3600 * 1000;
+  const thisWeek = traces.filter(
+    (t) => now - new Date(t.created_at).getTime() < oneWeek,
+  ).length;
+  const lastWeek = traces.filter((t) => {
+    const age = now - new Date(t.created_at).getTime();
+    return age >= oneWeek && age < 2 * oneWeek;
+  }).length;
+  const weekChange =
+    lastWeek === 0 ? null : ((thisWeek - lastWeek) / lastWeek) * 100;
+
+  const pct = (n: number) =>
+    total === 0 ? "0%" : `${((n / total) * 100).toFixed(1)}%`;
+
+  // Average latency — only traces that have timings data
+  const tracesWithLatency = traces.filter(
+    (t) => t.timings && (t.timings.total_ms ?? t.timings.total) != null,
+  );
+  const avgLatencyMs =
+    tracesWithLatency.length === 0
+      ? null
+      : tracesWithLatency.reduce(
+          (sum, t) => sum + (t.timings.total_ms ?? t.timings.total ?? 0),
+          0,
+        ) / tracesWithLatency.length;
+  const avgLatencyLabel =
+    avgLatencyMs === null
+      ? "—"
+      : avgLatencyMs >= 1000
+        ? `${(avgLatencyMs / 1000).toFixed(2)}s`
+        : `${Math.round(avgLatencyMs)}ms`;
 
   return (
     <div className="space-y-4">
+      {/* ── Stat cards ── */}
+      <div className="grid grid-cols-5 gap-4">
+        {/* Total */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
+            <Activity className="h-5 w-5 text-blue-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Tổng truy vấn</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">
+              {total.toLocaleString("vi-VN")}
+            </p>
+            {weekChange !== null ? (
+              <p className={`text-[11px] mt-1 flex items-center gap-0.5 font-medium ${weekChange >= 0 ? "text-green-600" : "text-red-500"}`}>
+                {weekChange >= 0
+                  ? <TrendingUp className="h-3 w-3" />
+                  : <TrendingDown className="h-3 w-3" />}
+                {Math.abs(weekChange).toFixed(1)}% so với tuần trước
+              </p>
+            ) : (
+              <p className="text-[11px] mt-1 text-muted-foreground">Tuần này</p>
+            )}
+          </div>
+        </div>
+
+        {/* Completed */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-green-50 dark:bg-green-950/40 flex items-center justify-center shrink-0">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Hoàn thành</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">
+              {completedCount.toLocaleString("vi-VN")}
+            </p>
+            <p className="text-[11px] mt-1 text-green-600 font-medium">{pct(completedCount)}</p>
+          </div>
+        </div>
+
+        {/* Running */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center shrink-0">
+            <RefreshCw className="h-5 w-5 text-amber-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Đang chạy</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">
+              {runningCount.toLocaleString("vi-VN")}
+            </p>
+            <p className="text-[11px] mt-1 text-amber-500 font-medium">{pct(runningCount)}</p>
+          </div>
+        </div>
+
+        {/* Error */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Lỗi / Bị chặn</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">
+              {errorCount.toLocaleString("vi-VN")}
+            </p>
+            <p className="text-[11px] mt-1 text-red-500 font-medium">{pct(errorCount)}</p>
+          </div>
+        </div>
+
+        {/* Avg latency */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-violet-50 dark:bg-violet-950/40 flex items-center justify-center shrink-0">
+            <Timer className="h-5 w-5 text-violet-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Độ trễ TB</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">{avgLatencyLabel}</p>
+            <p className="text-[11px] mt-1 text-muted-foreground">
+              {tracesWithLatency.length > 0
+                ? `trên ${tracesWithLatency.length.toLocaleString("vi-VN")} truy vấn`
+                : "Chưa có dữ liệu"}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Filters ── */}
       <div className="flex items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -188,6 +365,9 @@ function QueryLogsTab() {
             </SelectItem>
             <SelectItem className="text-[12.5px]" value="completed">
               Hoàn thành
+            </SelectItem>
+            <SelectItem className="text-[12.5px]" value="running">
+              Đang chạy
             </SelectItem>
             <SelectItem className="text-[12.5px]" value="no-answer">
               Không trả lời
@@ -217,9 +397,9 @@ function QueryLogsTab() {
                 Query
               </TableHead>
               <TableHead className="font-bold text-black">Trạng thái</TableHead>
-              <TableHead className="font-bold text-black">Tài liệu</TableHead>
-              <TableHead className="font-bold text-black">Nguồn</TableHead>
-              <TableHead className="font-bold text-black">Độ trễ</TableHead>
+              <TableHead className="font-bold text-black text-center">Tài liệu</TableHead>
+              <TableHead className="font-bold text-black text-center">Nguồn</TableHead>
+              <TableHead className="font-bold text-black text-center">Độ trễ</TableHead>
               <TableHead className="font-bold text-black">Trace ID</TableHead>
             </TableRow>
           </TableHeader>
@@ -319,12 +499,13 @@ function QueryLogsTab() {
   );
 }
 
-// ── Job Monitor ───────────────────────────────────────────────────────────────
+// Tab displaying job stat counters and a full job table with retry/cancel actions.
 function JobsTab() {
   const { token } = useAuth();
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch all jobs and refresh the list.
   const load = () => {
     setLoading(true);
     fetchJobs(token)
@@ -335,30 +516,12 @@ function JobsTab() {
       .finally(() => setLoading(false));
   };
 
+  // Load jobs on mount.
   useEffect(() => {
     load();
   }, []);
 
-  const handleRetry = async (jobId: string) => {
-    try {
-      await retryJob(jobId, token);
-      toast({ variant: "success", title: "Job requeued" });
-      load();
-    } catch {
-      toast({ variant: "destructive", title: "Retry failed" });
-    }
-  };
-
-  const handleCancel = async (jobId: string) => {
-    try {
-      await cancelJob(jobId, token);
-      toast({ variant: "success", title: "Job cancelled" });
-      load();
-    } catch {
-      toast({ variant: "destructive", title: "Cancel failed" });
-    }
-  };
-
+  // Icon + label + className lookup for each job status value.
   const statusConfig: Record<
     string,
     { className: string; label: string; icon: React.ReactNode }
@@ -389,62 +552,95 @@ function JobsTab() {
     },
   };
 
-  const statusLabels: Record<string, string> = {
-    queued: "Hàng đợi",
-    running: "Đang chạy",
-    succeeded: "Thành công",
-    failed: "Thất bại",
+  // Re-enqueue a failed job.
+  const handleRetry = async (jobId: string) => {
+    try {
+      await retryJob(jobId, token);
+      toast({ variant: "success", title: "Job requeued" });
+      load();
+    } catch {
+      toast({ variant: "destructive", title: "Retry failed" });
+    }
   };
 
-  const statColors: Record<string, { text: string; count: string }> = {
-    queued: { text: "text-muted-foreground", count: "text-muted-foreground" },
-    running: { text: "text-yellow-500", count: "text-yellow-600" },
-    succeeded: { text: "text-green-600", count: "text-green-700" },
-    failed: { text: "text-red-500", count: "text-red-700" },
+  // Cancel a running job.
+  const handleCancel = async (jobId: string) => {
+    try {
+      await cancelJob(jobId, token);
+      toast({ variant: "success", title: "Job cancelled" });
+      load();
+    } catch {
+      toast({ variant: "destructive", title: "Cancel failed" });
+    }
   };
 
-  const formatDocLabel = (job: JobRecord) => {
-    const title = job.doc_title ?? job.document_id ?? "";
-    const ver = job.version_no != null ? job.version_no : null;
-    return (
-      <span className="text-[12.5px]">
-        {title}
-        {ver != null && (
-          <code className="ml-1 text-muted-foreground font-mono font-bold">
-            (v{ver})
-          </code>
-        )}
-      </span>
-    );
+  const jobTotal = jobs.length;
+  const jobCounts = {
+    queued:    jobs.filter((j) => j.status === "queued").length,
+    running:   jobs.filter((j) => j.status === "running").length,
+    succeeded: jobs.filter((j) => j.status === "succeeded").length,
+    failed:    jobs.filter((j) => j.status === "failed").length,
   };
-
-  const shortId = (id: string) =>
-    id.length > 10 ? `${id.slice(0, 6)}...${id.slice(-4)}` : id;
-
-  const statuses = ["queued", "running", "succeeded", "failed"] as const;
 
   return (
     <div className="space-y-4">
       {/* Stats */}
       <div className="grid grid-cols-4 gap-4">
-        {statuses.map((s) => {
-          const c = statColors[s];
+        {/* Queued */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center shrink-0">
+            <Clock className="h-5 w-5 text-slate-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Hàng đợi</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">{jobCounts.queued}</p>
+            <p className="text-[11px] mt-1 text-muted-foreground">
+              {jobTotal === 0 ? "0%" : `${((jobCounts.queued / jobTotal) * 100).toFixed(1)}%`}
+            </p>
+          </div>
+        </div>
 
-          return (
-            <div
-              key={s}
-              className="rounded-lg border border-border bg-card p-4"
-            >
-              <p className={cn("text-sm font-medium", c.text)}>
-                {statusLabels[s] || s}
-              </p>
+        {/* Running */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center shrink-0">
+            <Loader2 className="h-5 w-5 text-amber-500 animate-spin" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Đang chạy</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">{jobCounts.running}</p>
+            <p className="text-[11px] mt-1 text-amber-500 font-medium">
+              {jobTotal === 0 ? "0%" : `${((jobCounts.running / jobTotal) * 100).toFixed(1)}%`}
+            </p>
+          </div>
+        </div>
 
-              <p className={cn("mt-1 text-2xl font-semibold", c.count)}>
-                {jobs.filter((j) => j.status === s).length}
-              </p>
-            </div>
-          );
-        })}
+        {/* Succeeded */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-green-50 dark:bg-green-950/40 flex items-center justify-center shrink-0">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Thành công</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">{jobCounts.succeeded}</p>
+            <p className="text-[11px] mt-1 text-green-600 font-medium">
+              {jobTotal === 0 ? "0%" : `${((jobCounts.succeeded / jobTotal) * 100).toFixed(1)}%`}
+            </p>
+          </div>
+        </div>
+
+        {/* Failed */}
+        <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+          <div className="h-11 w-11 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
+            <XCircle className="h-5 w-5 text-red-500" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[12px] text-muted-foreground font-medium">Thất bại</p>
+            <p className="text-2xl font-bold text-foreground mt-0.5">{jobCounts.failed}</p>
+            <p className="text-[11px] mt-1 text-red-500 font-medium">
+              {jobTotal === 0 ? "0%" : `${((jobCounts.failed / jobTotal) * 100).toFixed(1)}%`}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Table */}

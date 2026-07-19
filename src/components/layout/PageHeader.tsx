@@ -1,3 +1,4 @@
+/** PageHeader: sticky page header with optional breadcrumb trail, title, description, and action slot. */
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -13,6 +14,7 @@ interface PageHeaderProps {
   actions?: React.ReactNode;
 }
 
+// Renders a sticky header with breadcrumb nav, page title/description, and an optional actions toolbar.
 export function PageHeader({ title, description, breadcrumbs, actions }: PageHeaderProps) {
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur-sm px-6 py-4 shadow-card">

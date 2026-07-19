@@ -1,6 +1,8 @@
+/** AppSidebar: fixed navigation sidebar with permission-filtered nav items, pending-approval badge, and user menu. */
 import { NavLink, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { UserProfileDialog } from "./UserProfileDialog";
 import { getPendingReviewCount } from "@/services/documents.api";
 import {
   MessageSquare,
@@ -8,7 +10,6 @@ import {
   FileText,
   CheckSquare,
   Users,
-  Shield,
   Activity,
   Settings,
   LogOut,
@@ -16,6 +17,7 @@ import {
   Building2,
   Mail,
   ShieldCheck,
+  UserCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -32,6 +34,16 @@ interface NavItem {
   icon: React.ComponentType<{ className?: string }>;
   path: string;
   permission?: string;
+}
+
+// Extract up to 2 uppercase initials from a display name.
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 const navItems: NavItem[] = [
@@ -82,11 +94,14 @@ const navItems: NavItem[] = [
   },
 ];
 
+// Application sidebar: nav items filtered by FGA permissions, real-time approval badge, and user dropdown.
 export function AppSidebar() {
-  const { user, hasPermission, logout, login, token, isCorpMember } = useAuth();
+  const { user, hasPermission, logout, token, isCorpMember } = useAuth();
   const location = useLocation();
   const [pendingCount, setPendingCount] = useState(0);
+  const [profileOpen, setProfileOpen] = useState(false);
 
+  // Poll the pending document-review count every 30 s for corp members; clears on unmount.
   useEffect(() => {
     if (!isCorpMember || !token) return;
     const fetchCount = () => getPendingReviewCount(token).then(setPendingCount);
@@ -95,18 +110,10 @@ export function AppSidebar() {
     return () => clearInterval(id);
   }, [isCorpMember, token]);
 
+  // Filter nav items to those the current user has permission to access.
   const filteredNavItems = navItems.filter(
     (item) => !item.permission || hasPermission(item.permission),
   );
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
 
   return (
     <aside className="flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border">
@@ -203,6 +210,11 @@ export function AppSidebar() {
                 </DropdownMenuItem>
               ))} */}
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setProfileOpen(true)}>
+                <UserCircle className="mr-2 h-4 w-4" />
+                Thông tin tài khoản
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={logout}
                 className="text-destructive focus:text-destructive"
@@ -213,6 +225,15 @@ export function AppSidebar() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+      )}
+
+      {user && (
+        <UserProfileDialog
+          open={profileOpen}
+          onOpenChange={setProfileOpen}
+          user={user}
+          token={token}
+        />
       )}
     </aside>
   );

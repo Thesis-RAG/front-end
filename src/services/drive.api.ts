@@ -1,13 +1,15 @@
-// src/services/drive.api.ts
-// Đọc file từ Google Drive folder public (share link)
-// Yêu cầu: folder phải được share "Anyone with the link can view"
+/**
+ * Google Drive API — list files in a public shared folder and download their text content.
+ * Requires the folder to be shared as "Anyone with the link can view".
+ */
 
+// Base URL for the Google Drive REST API v3.
 const DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
 
-// Lấy VITE_GOOGLE_DRIVE_API_KEY từ .env
-// Thêm vào .env: VITE_GOOGLE_DRIVE_API_KEY=AIza...
+// API key read from the environment variable VITE_GOOGLE_DRIVE_API_KEY.
 const API_KEY = import.meta.env.VITE_GOOGLE_DRIVE_API_KEY ?? "";
 
+// Metadata for a file returned by the Drive Files list API.
 export interface DriveFile {
   id: string;
   name: string;
@@ -19,8 +21,8 @@ export interface DriveFile {
 }
 
 /**
- * Extract folder ID từ Google Drive share link
- * Hỗ trợ các dạng:
+ * Extract a folder ID from a Google Drive share link or raw ID string.
+ * Supports:
  *   https://drive.google.com/drive/folders/FOLDER_ID
  *   https://drive.google.com/drive/folders/FOLDER_ID?usp=sharing
  *   FOLDER_ID (raw)
@@ -29,10 +31,10 @@ export function extractFolderId(input: string): string | null {
   if (!input) return null;
   const trimmed = input.trim();
 
-  // Raw ID (không có /)
+  // If no slashes, treat the whole string as a raw folder ID.
   if (!trimmed.includes("/") && trimmed.length > 10) return trimmed;
 
-  // URL dạng /folders/ID
+  // Extract ID from URL path segment /folders/ID.
   const match = trimmed.match(/\/folders\/([a-zA-Z0-9_-]+)/);
   if (match) return match[1];
 
@@ -40,12 +42,13 @@ export function extractFolderId(input: string): string | null {
 }
 
 /**
- * Lấy danh sách file trong folder (recursive = false, chỉ lấy tầng 1)
+ * List files in the first level of a Drive folder (non-recursive).
+ * Throws if the API key is missing or the folder is not publicly accessible.
  */
 export async function listDriveFiles(folderId: string): Promise<DriveFile[]> {
   if (!API_KEY) {
     throw new Error(
-      "Google Drive API key chưa được cấu hình. Thêm VITE_GOOGLE_DRIVE_API_KEY vào .env"
+      "Google Drive API key is not configured. Add VITE_GOOGLE_DRIVE_API_KEY to .env"
     );
   }
 
@@ -64,17 +67,17 @@ export async function listDriveFiles(folderId: string): Promise<DriveFile[]> {
     const msg = err?.error?.message ?? `HTTP ${res.status}`;
     if (res.status === 403) {
       throw new Error(
-        "Không có quyền truy cập folder. Hãy chắc chắn folder được share 'Anyone with the link'."
+        "Access denied. Make sure the folder is shared as 'Anyone with the link'."
       );
     }
-    throw new Error(`Drive API lỗi: ${msg}`);
+    throw new Error(`Drive API error: ${msg}`);
   }
 
   const data = await res.json();
   return (data.files ?? []) as DriveFile[];
 }
 
-/** MIME types được hỗ trợ để gửi vào LLM */
+// MIME types supported for text extraction and LLM ingestion.
 const SUPPORTED_MIME_TYPES = new Set([
   "text/plain",
   "text/csv",
@@ -89,10 +92,12 @@ const SUPPORTED_MIME_TYPES = new Set([
   "application/vnd.google-apps.spreadsheet",
 ]);
 
+// Return true if the file's MIME type can be processed and sent to the LLM.
 export function isFileSupported(file: DriveFile): boolean {
   return SUPPORTED_MIME_TYPES.has(file.mimeType);
 }
 
+// Return a short human-readable label for a MIME type (e.g., "PDF", "DOCX").
 export function getMimeLabel(mimeType: string): string {
   const map: Record<string, string> = {
     "text/plain": "TXT",
@@ -112,29 +117,29 @@ export function getMimeLabel(mimeType: string): string {
 }
 
 /**
- * Tải nội dung file từ Drive (chỉ text-based)
- * Google Docs/Sheets → export sang text/plain
- * PDF → trả về arrayBuffer để parse riêng
+ * Download a Drive file and return its plain-text content.
+ * Google Docs are exported as plain text; Google Sheets as CSV.
+ * PDF and DOCX files are parsed via helper functions.
  */
 export async function downloadDriveFileText(file: DriveFile): Promise<string> {
-  if (!API_KEY) throw new Error("API key chưa cấu hình");
+  if (!API_KEY) throw new Error("API key is not configured");
 
   let url: string;
 
   if (file.mimeType === "application/vnd.google-apps.document") {
-    // Export Google Doc → plain text
+    // Export Google Doc as plain text.
     url = `${DRIVE_API_BASE}/files/${file.id}/export?mimeType=text%2Fplain&key=${API_KEY}`;
   } else if (file.mimeType === "application/vnd.google-apps.spreadsheet") {
-    // Export Google Sheet → CSV
+    // Export Google Sheet as CSV.
     url = `${DRIVE_API_BASE}/files/${file.id}/export?mimeType=text%2Fcsv&key=${API_KEY}`;
   } else {
-    // Download trực tiếp (alt=media)
+    // Download binary files directly (alt=media).
     url = `${DRIVE_API_BASE}/files/${file.id}?alt=media&key=${API_KEY}`;
   }
 
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Không tải được file: HTTP ${res.status}`);
+    throw new Error(`Failed to download file: HTTP ${res.status}`);
   }
 
   if (
@@ -142,7 +147,7 @@ export async function downloadDriveFileText(file: DriveFile): Promise<string> {
     file.mimeType ===
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   ) {
-    // Trả về base64 để caller tự parse (PDF/DOCX)
+    // Parse binary formats (PDF / DOCX) and return extracted text.
     const buffer = await res.arrayBuffer();
     return _arrayBufferToText(buffer, file);
   }
@@ -150,11 +155,11 @@ export async function downloadDriveFileText(file: DriveFile): Promise<string> {
   return res.text();
 }
 
+// Parse an ArrayBuffer to plain text using pdfjs-dist (PDF) or mammoth (DOCX).
 async function _arrayBufferToText(
   buffer: ArrayBuffer,
   file: DriveFile
 ): Promise<string> {
-  // PDF parsing qua pdfjs-dist (đã có trong project)
   if (file.mimeType === "application/pdf") {
     const pdfjsLib = await import("pdfjs-dist");
     pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -169,7 +174,6 @@ async function _arrayBufferToText(
     return text;
   }
 
-  // DOCX parsing qua mammoth (đã có trong project)
   if (
     file.mimeType ===
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

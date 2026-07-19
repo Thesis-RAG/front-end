@@ -1,3 +1,4 @@
+/** AuthContext: React context providing authentication state, session restoration, permission checks, and sensitivity gating. */
 import React, {
   createContext,
   useContext,
@@ -21,18 +22,22 @@ interface AuthContextType {
   ouiIds: string[];
 }
 
+// Module-level context object; consumed exclusively through useAuth().
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Wraps the app tree with auth state, session restoration from sessionStorage, and permission helpers.
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Derived auth state — recomputed whenever user changes.
   const isAuthenticated = user !== null;
   const isCorpMember = user?.is_corp_member ?? false;
   const maxClearance = user?.max_clearance ?? 1;
   const ouiIds = user?.oui_positions.map((p) => p.oui_id) ?? [];
 
+  // Restore session from sessionStorage on mount; clears token if /me returns an error.
   useEffect(() => {
     const savedToken = sessionStorage.getItem("access_token");
     if (!savedToken) {
@@ -50,6 +55,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // Authenticate with email/password, persist the token, and update user state.
   const login = useCallback(async (email: string, password: string) => {
     const res = await auth({ email, password });
     sessionStorage.setItem("access_token", res.access_token);
@@ -57,12 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(res.user as User);
   }, []);
 
+  // Clear the session token from storage and reset user state.
   const logout = useCallback(() => {
     sessionStorage.removeItem("access_token");
     setUser(null);
     setToken(null);
   }, []);
 
+  // Return true if the user's clearance level meets or exceeds the required sensitivity rank.
   const canViewSensitivity = useCallback(
     (level: SensitivityLevel): boolean => {
       if (!user) return false;
@@ -71,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user, maxClearance],
   );
 
+  // Map a permission key to a boolean based on the user's role and clearance level.
   const hasPermission = useCallback(
     (permission: string): boolean => {
       if (!user) return false;
@@ -104,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user, isCorpMember, maxClearance],
   );
 
-  // Tất cả hooks đã gọi xong, giờ mới được return sớm
+  // All hooks must be called before this early return to satisfy the Rules of Hooks.
   if (loading) return null;
 
   return (
@@ -127,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Custom hook for consuming AuthContext; throws if used outside AuthProvider.
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth must be used within an AuthProvider");

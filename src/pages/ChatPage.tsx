@@ -1,3 +1,4 @@
+/** ChatPage: main chat interface with conversation management, RAG/chatbot toggle, streaming responses, and sources panel. */
 import { useState, useRef, useEffect } from "react";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { ChatMessage } from "@/components/chat/ChatMessage";
@@ -8,6 +9,7 @@ import {
   Conversation,
   ChatMessage as ChatMessageType,
   Citation,
+  PolicyRule,
 } from "@/types";
 import { BookOpen, Bot } from "lucide-react";
 import {
@@ -23,6 +25,21 @@ import { fetchOrgUnitInstances, fetchOrgUnits } from "@/services/org_units.api";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
+// Quick-start suggestion prompts shown on the RAG empty-state screen.
+const RAG_SUGGESTIONS = [
+  "Chính sách bảo mật thông tin?",
+  "Quy trình phê duyệt hợp đồng?",
+  "Điều khoản hợp đồng mẫu?",
+];
+
+// Quick-start suggestion prompts shown on the chatbot empty-state screen.
+const CHATBOT_SUGGESTIONS = [
+  "Tóm tắt tài liệu",
+  "Phân tích dữ liệu",
+  "Soạn thảo văn bản",
+];
+
+// Full-page chat view: conversation list sidebar, message thread, streaming input, and collapsible sources panel.
 export default function ChatPage() {
   const { token, user, isCorpMember } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -31,7 +48,6 @@ export default function ChatPage() {
   const [availableOuis, setAvailableOuis] = useState<
     { id: string; name: string; ou_name: string }[]
   >([]);
-
   const [chatMode, setChatMode] = useState<"rag" | "chatbot">("rag");
   const [pendingAttach, setPendingAttach] = useState<{
     text: string;
@@ -47,18 +63,22 @@ export default function ChatPage() {
   const [focusCitationId, setFocusCitationId] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Open the sources panel and auto-expand the clicked citation.
   const handleCitationClick = (citations: Citation[], citationId: string) => {
     setOpenSources(citations);
     setHoveredCitationId(citationId);
-    setFocusCitationId(citationId); // triggers auto-expand in panel
+    setFocusCitationId(citationId);
   };
 
+  // Toggle a single OUI filter on or off.
   const handleToggleOui = (id: string) => {
     setSelectedOuiIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
   };
 
+  // Fetch messages for a conversation and map them to the ChatMessageType shape.
   const handleGetConversationMessage = async (conversationId?: string) => {
     if (!conversationId) return;
     const result = await getListConversationMessage(conversationId, token);
@@ -66,15 +86,16 @@ export default function ChatPage() {
     const mapped: ChatMessageType[] = [];
 
     for (const item of result) {
-      // Luôn push user message
+      // Always push the user turn.
       mapped.push({
         id: item.messageId,
         role: "user",
         content: item.content,
         timestamp: item.createdAt,
+        attachedFileName: item.attachedFileName ?? undefined,
       });
 
-      // Chỉ push assistant nếu có nội dung thật
+      // Only push the assistant turn if it has real content.
       const assistant = item.assistantMessage;
       if (assistant?.content && assistant.content.trim().length > 0) {
         mapped.push({
@@ -97,14 +118,14 @@ export default function ChatPage() {
           status: assistant.status ?? "success",
         });
       }
-      // Nếu assistant null/rỗng → không push gì, user message đứng một mình
     }
 
-    // Không sort — backend đã trả đúng thứ tự theo created_at của user message
+    // No sort needed — backend returns messages in created_at order.
     setMessages(mapped);
     return mapped;
   };
 
+  // Load the conversation list and available OUI filters on mount.
   useEffect(() => {
     const load = async () => {
       const result = await getListConversation(user.id, token);
@@ -125,7 +146,7 @@ export default function ChatPage() {
         fetchOrgUnits(token),
       ]);
 
-      // Tính allowed OUI ids giống DocumentsPage
+      // Build the set of OUI IDs accessible to this user, mirroring DocumentsPage logic.
       let allowedIds: Set<string>;
 
       if (isCorpMember) {
@@ -163,10 +184,12 @@ export default function ChatPage() {
     load();
   }, [user.id, token]);
 
+  // Scroll to the latest message whenever the message list changes.
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Create a new empty conversation and select it.
   const handleNewConversation = async () => {
     const result = await createConversation(
       { title: "Cuộc trò chuyện" },
@@ -184,12 +207,14 @@ export default function ChatPage() {
     setMessages([]);
   };
 
+  // Switch the active conversation and load its messages.
   const handleSelectConversation = (id: string) => {
     setActiveConversationId(id);
     handleGetConversationMessage(id);
     setOpenSources(null);
   };
 
+  // Persist a title change for a conversation.
   const handleRenameConversation = async (id: string, title: string) => {
     await updateConversation(activeConversationId, { title }, token);
     setConversations(
@@ -197,6 +222,7 @@ export default function ChatPage() {
     );
   };
 
+  // Delete a conversation and select the next available one.
   const handleDeleteConversation = async (id: string) => {
     await deleteConversation(id, token);
     const remaining = conversations.filter((c) => c.id !== id);
@@ -210,6 +236,7 @@ export default function ChatPage() {
     }
   };
 
+  // Send a message: creates a conversation if needed, optimistically appends both turns, then streams the response.
   const handleSendMessage = async (
     content: string,
     fileContent?: string,
@@ -254,6 +281,7 @@ export default function ChatPage() {
         timestamp: new Date().toISOString(),
         isStreaming: true,
         status: "loading",
+        mode: chatMode,
       },
     ]);
     setIsStreaming(true);
@@ -281,6 +309,7 @@ export default function ChatPage() {
                     isStreaming: false,
                     status: "success",
                     citations: data.sources,
+                    appliedRules: (data.applied_rules ?? (m.appliedRules ?? [])) as PolicyRule[],
                   }
                 : m,
             ),
@@ -305,6 +334,15 @@ export default function ChatPage() {
         fileContent,
         fileName,
         chatSource,
+        (rules) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === tempAssistantId
+                ? { ...m, appliedRules: rules as PolicyRule[] }
+                : m,
+            ),
+          );
+        },
       );
     } catch {
       setMessages((prev) =>
@@ -318,6 +356,7 @@ export default function ChatPage() {
     }
   };
 
+  // Mark streaming as stopped and finalize any in-progress assistant message.
   const handleStopStreaming = () => {
     setIsStreaming(false);
     setMessages((prev) =>
@@ -347,7 +386,7 @@ export default function ChatPage() {
           <div className={cn(
             "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium shrink-0",
             chatMode === "rag"
-              ? "bg-primary/10 text-primary"
+              ? "bg-blue-500/10 text-blue-600"
               : "bg-teal-500/10 text-teal-600",
           )}>
             {chatMode === "rag" ? <BookOpen className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
@@ -361,11 +400,11 @@ export default function ChatPage() {
               <div className={cn(
                 "flex h-20 w-20 items-center justify-center rounded-2xl shadow-card-md",
                 chatMode === "rag"
-                  ? "bg-gradient-to-br from-primary/20 to-blue-500/10"
+                  ? "bg-gradient-to-br from-blue-500/20 to-blue-400/10"
                   : "bg-gradient-to-br from-teal-500/20 to-emerald-500/10",
               )}>
                 {chatMode === "rag" ? (
-                  <BookOpen className="h-9 w-9 text-primary" />
+                  <BookOpen className="h-9 w-9 text-blue-600" />
                 ) : (
                   <Bot className="h-9 w-9 text-teal-600" />
                 )}
@@ -383,31 +422,15 @@ export default function ChatPage() {
                 : "Trợ lý AI đa năng. Hỏi tôi bất cứ điều gì."}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2 max-w-md">
-              {chatMode === "rag" ? (
-                <>
-                  {["Chính sách bảo mật thông tin?", "Quy trình phê duyệt hợp đồng?", "Điều khoản hợp đồng mẫu?"].map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => handleSendMessage(q)}
-                      className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all duration-150"
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </>
-              ) : (
-                <>
-                  {["Tóm tắt tài liệu", "Phân tích dữ liệu", "Soạn thảo văn bản"].map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => handleSendMessage(q)}
-                      className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-primary/30 hover:text-primary hover:bg-primary/5 transition-all duration-150"
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </>
-              )}
+              {(chatMode === "rag" ? RAG_SUGGESTIONS : CHATBOT_SUGGESTIONS).map((q) => (
+                <button
+                  key={q}
+                  onClick={() => handleSendMessage(q)}
+                  className="rounded-full border border-border bg-card px-4 py-2 text-xs text-muted-foreground shadow-card hover:border-blue-400/50 hover:text-blue-600 hover:bg-blue-50 transition-all duration-150"
+                >
+                  {q}
+                </button>
+              ))}
             </div>
           </div>
         ) : (
@@ -424,13 +447,14 @@ export default function ChatPage() {
                   <ChatMessage
                     key={message.id}
                     message={message}
+                    chatMode={chatMode}
                     userQuery={userQuery}
                     onSourcesClick={(citations) => {
                       setOpenSources((prev) =>
                         prev === citations ? null : citations,
                       );
                       setOpenSourcesQuery(userQuery);
-                      setFocusCitationId(null); // Nguồn button: no auto-expand
+                      setFocusCitationId(null);
                     }}
                     onFeedback={(messageId, helpful) =>
                       console.log("Feedback:", { messageId, helpful })

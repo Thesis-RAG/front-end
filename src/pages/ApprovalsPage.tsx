@@ -1,11 +1,10 @@
+/** ApprovalsPage: admin page for reviewing pending documents and managing document access requests. */
 import { useState, useEffect } from "react";
-import { CheckCircle, XCircle, Clock, FileText, Eye, Lock, ShieldCheck, ShieldX, Ban, Infinity } from "lucide-react";
+import { CheckCircle, Clock, FileText, Lock, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { SensitivityLevelBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -38,36 +37,19 @@ import {
 } from "@/services/documents.api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   fetchOrgUnits,
   fetchOrgUnitInstances,
   OrgUnit,
   OrgUnitInstance,
 } from "@/services/org_units.api";
-import { SENSITIVITY_LEVEL, SENSITIVITY_COLOR } from "@/types";
+import { SENSITIVITY_LEVEL } from "@/types";
+import { DocRecord, ApprovalCard } from "@/components/approvals/ApprovalCard";
+import { AccessRequestCard } from "@/components/approvals/AccessRequestCard";
+import { GrantedAccessCard } from "@/components/approvals/GrantedAccessCard";
 
-interface DocRecord {
-  id: string;
-  title: string;
-  status: string;
-  sensitivity: number;
-  oui_ids: string[];
-  owner_user_id: string;
-  version_count: number;
-  created_at: string;
-  updated_at: string;
-  current_version_id?: string;
-}
-
-const formatDate = (s: string) =>
-  new Date(s).toLocaleDateString("vi-VN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
+// Main page component: tab-based view for pending documents, access requests, and granted-access management.
 export default function ApprovalsPage() {
   const { token } = useAuth();
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
@@ -92,7 +74,9 @@ export default function ApprovalsPage() {
   const [arNote, setArNote] = useState("");
   const [arExpiry, setArExpiry] = useState("");
   const [submittingAR, setSubmittingAR] = useState(false);
+  const [revokingARId, setRevokingARId] = useState<string | null>(null);
 
+  // Fetch pending document approvals and refresh the list.
   const load = () => {
     setLoading(true);
     fetchPendingApprovals(token)
@@ -103,6 +87,7 @@ export default function ApprovalsPage() {
       .finally(() => setLoading(false));
   };
 
+  // Fetch all access requests and refresh the access-request list.
   const loadAccessRequests = () => {
     setLoadingAR(true);
     fetchAllAccessRequests(token)
@@ -111,11 +96,13 @@ export default function ApprovalsPage() {
       .finally(() => setLoadingAR(false));
   };
 
+  // Load documents and access requests on mount.
   useEffect(() => {
     load();
     loadAccessRequests();
   }, []);
 
+  // Load org units and OUI instances for label resolution in approval cards.
   useEffect(() => {
     fetchOrgUnits(token)
       .then(setOrgUnits)
@@ -125,9 +112,15 @@ export default function ApprovalsPage() {
       .catch(() => {});
   }, []);
 
+  // Derived subsets recomputed on each render.
   const pendingReview = docs.filter((d) => d.status === "review");
   const pendingUploaded = docs.filter((d) => d.status === "uploaded");
+  const approvedAR = accessRequests.filter(
+    (r) => r.status === "approved" && (r.expires_at === null || new Date(r.expires_at) > new Date()),
+  );
+  const pendingAR = accessRequests.filter((r) => r.status === "pending");
 
+  // Open the approve/reject confirmation dialog for a document.
   const handleAction = (doc: DocRecord, type: "approve" | "reject") => {
     setSelected(doc);
     setActionType(type);
@@ -135,6 +128,7 @@ export default function ApprovalsPage() {
     setApproveSensitivity(doc.sensitivity);
   };
 
+  // Open the document file in a new tab via a pre-signed URL.
   const handleView = async (doc: DocRecord) => {
     if (!doc.current_version_id) {
       toast({ variant: "destructive", title: "Chưa có file" });
@@ -147,6 +141,7 @@ export default function ApprovalsPage() {
     }
   };
 
+  // Submit the approve or reject action for the selected document.
   const confirmAction = async () => {
     if (!selected || !actionType) return;
     setSubmitting(true);
@@ -175,8 +170,7 @@ export default function ApprovalsPage() {
     }
   };
 
-  const [revokingARId, setRevokingARId] = useState<string | null>(null);
-
+  // Revoke an approved access grant after a browser confirmation prompt.
   const handleRevokeAR = async (req: AccessRequestRead) => {
     if (!confirm(`Thu hồi quyền truy cập tài liệu "${req.document_title}" của ${req.requester_name}?`)) return;
     setRevokingARId(req.id);
@@ -191,10 +185,7 @@ export default function ApprovalsPage() {
     }
   };
 
-  const approvedAR = accessRequests.filter(
-    (r) => r.status === "approved" && (r.expires_at === null || new Date(r.expires_at) > new Date()),
-  );
-
+  // Submit the approve or reject action for the selected access request.
   const confirmARAction = async () => {
     if (!selectedAR || !arAction) return;
     setSubmittingAR(true);
@@ -219,64 +210,17 @@ export default function ApprovalsPage() {
     }
   };
 
-  const pendingAR = accessRequests.filter((r) => r.status === "pending");
-
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Phê duyệt"
         description="Xét duyệt tài liệu và phiên bản mới"
       />
-      <div className="flex-1 overflow-auto p-6">
-        {/* Stats */}
-        <div className="mb-6 grid grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Đang chờ xét duyệt
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">
-                  {pendingReview.length}
-                </span>
-                <Clock className="h-5 w-5 text-status-review" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Đã tải lên (Đang chờ xử lý)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">
-                  {pendingUploaded.length}
-                </span>
-                <FileText className="h-5 w-5 text-status-draft" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Tổng số chờ xử lý
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">{docs.length}</span>
-                <CheckCircle className="h-5 w-5 text-status-approved" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        <Tabs defaultValue="review" className="space-y-4">
-          <TabsList>
+      <Tabs defaultValue="review" className="flex-1 flex flex-col overflow-hidden">
+        {/* Tab bar — top */}
+        <div className="border-b border-border px-6 shrink-0">
+          <TabsList className="mt-2">
             <TabsTrigger value="review" className="gap-2 text-[12.5px]">
               Đang chờ xét duyệt
               {pendingReview.length > 0 && (
@@ -322,8 +266,56 @@ export default function ApprovalsPage() {
               )}
             </TabsTrigger>
           </TabsList>
+        </div>
 
-          <TabsContent value="review" className="space-y-4">
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-4 px-6 pt-4 pb-0 shrink-0">
+          {[
+            {
+              label: "Chờ xét duyệt",
+              value: pendingReview.length,
+              icon: Clock,
+              bg: "bg-orange-50 dark:bg-orange-950/40",
+              iconCls: "text-orange-500",
+            },
+            {
+              label: "Đã tải lên (chờ xử lý)",
+              value: pendingUploaded.length,
+              icon: FileText,
+              bg: "bg-yellow-50 dark:bg-yellow-950/40",
+              iconCls: "text-yellow-600",
+            },
+            {
+              label: "Yêu cầu truy cập",
+              value: pendingAR.length,
+              icon: Lock,
+              bg: "bg-blue-50 dark:bg-blue-950/40",
+              iconCls: "text-blue-600",
+            },
+            {
+              label: "Tổng chờ xử lý",
+              value: docs.length,
+              icon: CheckCircle,
+              bg: "bg-green-50 dark:bg-green-950/40",
+              iconCls: "text-green-600",
+            },
+          ].map(({ label, value, icon: Icon, bg, iconCls }) => (
+            <div key={label} className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+              <div className={`h-11 w-11 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
+                <Icon className={`h-5 w-5 ${iconCls}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] text-muted-foreground font-medium">{label}</p>
+                <p className="text-2xl font-bold text-foreground mt-0.5">
+                  {loading || loadingAR ? "—" : value}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 pt-4 pb-6">
+          <TabsContent value="review" className="mt-0 space-y-4">
             {loading ? (
               <p className="text-sm text-muted-foreground">Loading...</p>
             ) : pendingReview.length === 0 ? (
@@ -412,8 +404,8 @@ export default function ApprovalsPage() {
               ))
             )}
           </TabsContent>
-        </Tabs>
-      </div>
+        </div>
+      </Tabs>
 
       {/* Access Request Action Dialog */}
       <Dialog open={!!selectedAR} onOpenChange={() => setSelectedAR(null)}>
@@ -488,7 +480,7 @@ export default function ApprovalsPage() {
                 className="text-[12px] text-muted-foreground items-center flex gap-1"
               >
                 <div className="mr-1">{selected?.title}</div>
-                <code className="ml-1text-sm text-muted-foreground">
+                <code className="ml-1 text-sm text-muted-foreground">
                   • v{selected?.version_count}
                 </code>
               </Badge>
@@ -557,295 +549,3 @@ export default function ApprovalsPage() {
   );
 }
 
-function ApprovalCard({
-  doc,
-  orgUnits,
-  ouis,
-  onApprove,
-  onReject,
-  onView,
-}: {
-  doc: DocRecord;
-  orgUnits: OrgUnit[];
-  ouis: OrgUnitInstance[];
-  onApprove: () => void;
-  onReject: () => void;
-  onView: () => void;
-}) {
-  const getOuiLabel = (ouiId: string) => {
-    const oui = ouis.find((o) => o.id === ouiId);
-    const ou = orgUnits.find((u) => u.id === oui?.ou_id);
-    return oui ? `${ou?.name ?? ""} / ${oui.name}` : ouiId.slice(0, 8);
-  };
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-[15px]">{doc.title}</span>
-              {/* ← thay SensitivityLevelBadge bằng: */}
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${SENSITIVITY_COLOR[doc.sensitivity] ?? "bg-gray-100 text-gray-700"}`}
-              >
-                {SENSITIVITY_LEVEL[doc.sensitivity] ?? doc.sensitivity}
-              </span>
-            </div>
-            <div className="flex flex-row items-center gap-4 my-2">
-              <div className="text-[12px]">Đơn vị:</div>
-              {doc.oui_ids.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {doc.oui_ids.map((id) => (
-                    <Badge
-                      key={id}
-                      variant="secondary"
-                      className="text-[11px] font-normal"
-                    >
-                      {getOuiLabel(id)}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground mb-2">
-              <span className="text-[12px] font-semibold">
-                Phiên bản:{" "}
-                <code className="rounded bg-muted px-1">
-                  v{doc.version_count}
-                </code>
-              </span>
-              <span>·</span>
-              <span className="text-[12px] font-semibold">Cập nhật cuối:</span>
-              <span className="text-[11.5px]">
-                {formatDate(doc.updated_at)}
-              </span>
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground font-mono">
-              ID: {doc.id.slice(0, 30)}...
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onView}
-              className="text-xs bg-green-100 text-green-700 hover:bg-green-200 hover:text-green-800"
-            >
-              <Eye className="mr-1.5 h-4 w-4" /> Xem tài liệu
-            </Button>
-            <Button size="sm" onClick={onApprove} className="text-xs">
-              <CheckCircle className="mr-1.5 h-4 w-4" />
-              Xét duyệt
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReject}
-              className="text-xs hover:bg-gray-100 hover:text-black"
-            >
-              <XCircle className="mr-1.5 h-4 w-4" />
-              Từ chối
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function AccessRequestCard({
-  req,
-  onApprove,
-  onReject,
-}: {
-  req: AccessRequestRead;
-  onApprove: () => void;
-  onReject: () => void;
-}) {
-  const statusIcon = {
-    pending: <Clock className="h-4 w-4 text-amber-500" />,
-    approved: <ShieldCheck className="h-4 w-4 text-green-600" />,
-    rejected: <ShieldX className="h-4 w-4 text-destructive" />,
-  }[req.status];
-
-  const statusLabel = {
-    pending: "Đang chờ",
-    approved: "Đã phê duyệt",
-    rejected: "Đã từ chối",
-  }[req.status];
-
-  const initials = (req.requester_name ?? req.requester_email ?? "?")
-    .split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0 border border-border">
-              <span className="text-sm font-bold text-foreground">{initials}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-[14px]">{req.requester_name ?? req.user_id}</p>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  {statusIcon} {statusLabel}
-                </span>
-              </div>
-              {req.requester_email && req.requester_email !== req.requester_name && (
-                <p className="text-[11px] text-muted-foreground">{req.requester_email}</p>
-              )}
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="text-[13px] font-medium">{req.document_title ?? req.document_id}</span>
-                {req.document_sensitivity != null && (
-                  <SensitivityLevelBadge level={req.document_sensitivity} className="px-1.5 py-0 text-[10px]" />
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
-                <span>Gửi lúc: {formatDate(req.created_at)}</span>
-                {req.admin_note && (
-                  <span className="italic">· Ghi chú: {req.admin_note}</span>
-                )}
-              </div>
-            </div>
-          </div>
-          {req.status === "pending" && (
-            <div className="flex items-center gap-2 shrink-0">
-              <Button size="sm" onClick={onApprove} className="text-xs">
-                <ShieldCheck className="mr-1.5 h-4 w-4" /> Phê duyệt
-              </Button>
-              <Button variant="outline" size="sm" onClick={onReject} className="text-xs hover:bg-gray-100 hover:text-black">
-                <XCircle className="mr-1.5 h-4 w-4" /> Từ chối
-              </Button>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function GrantedAccessCard({
-  req,
-  onRevoke,
-  revoking,
-}: {
-  req: AccessRequestRead;
-  onRevoke: () => void;
-  revoking: boolean;
-}) {
-  const initials = (req.requester_name ?? req.requester_email ?? "?")
-    .split(" ")
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          {/* Left: User + Document info */}
-          <div className="flex items-start gap-3 flex-1 min-w-0">
-            <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0 border border-primary/20">
-              <span className="text-sm font-bold text-primary">{initials}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="font-semibold text-[14px]">{req.requester_name ?? req.user_id}</p>
-                <ShieldCheck className="h-3.5 w-3.5 text-green-600" />
-              </div>
-              {req.requester_email && req.requester_email !== req.requester_name && (
-                <p className="text-[11px] text-muted-foreground">{req.requester_email}</p>
-              )}
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="text-[13px] font-medium">{req.document_title ?? req.document_id}</span>
-                {req.document_sensitivity != null && (
-                  <SensitivityLevelBadge level={req.document_sensitivity} className="px-1.5 py-0 text-[10px]" />
-                )}
-              </div>
-              <div className="flex items-center gap-3 mt-1.5 text-[11px] text-muted-foreground flex-wrap">
-                {req.resolved_at && (
-                  <span>Cấp lúc: {formatDate(req.resolved_at)}</span>
-                )}
-                {req.admin_note && (
-                  <span className="italic">· Ghi chú: {req.admin_note}</span>
-                )}
-              </div>
-            </div>
-          </div>
-          {/* Right: Expiry + Revoke */}
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
-              <span>Còn lại:</span>
-              <ARCountdown expiresAt={req.expires_at} />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-              disabled={revoking}
-              onClick={onRevoke}
-            >
-              <Ban className="mr-1.5 h-3.5 w-3.5" />
-              {revoking ? "Đang thu hồi..." : "Thu hồi quyền"}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function ARCountdown({ expiresAt }: { expiresAt: string | null }) {
-  const [remaining, setRemaining] = useState<number | null>(null);
-  useEffect(() => {
-    if (!expiresAt) return;
-    const update = () => setRemaining(Math.max(0, new Date(expiresAt).getTime() - Date.now()));
-    update();
-    const id = setInterval(update, 1000);
-    return () => clearInterval(id);
-  }, [expiresAt]);
-
-  if (!expiresAt) return <span className="inline-flex items-center gap-1 text-green-600 text-sm font-medium"><Infinity className="h-3.5 w-3.5" /> Vĩnh viễn</span>;
-  if (remaining === null) return null;
-  if (remaining === 0) return <span className="text-destructive text-sm font-medium">Đã hết hạn</span>;
-
-  const s = Math.floor(remaining / 1000);
-  const d = Math.floor(s / 86400);
-  const h = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  const parts: string[] = [];
-  if (d > 0) parts.push(`${d}n`);
-  if (h > 0) parts.push(`${h}g`);
-  if (m > 0) parts.push(`${m}p`);
-  parts.push(`${String(sec).padStart(2, "0")}s`);
-  const color = s < 3600 ? "text-destructive" : s < 86400 ? "text-amber-500" : "text-foreground";
-  return <span className={`font-mono text-sm font-semibold tabular-nums ${color}`}>{parts.join(" ")}</span>;
-}
-
-function EmptyState({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-lg border border-dashed border-border p-12 text-center">
-      <Icon className="mx-auto h-12 w-12 text-muted-foreground" />
-      <h3 className="mt-4 font-medium">{title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
-}

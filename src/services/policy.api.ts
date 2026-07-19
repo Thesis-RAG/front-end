@@ -1,3 +1,4 @@
+/** Policy API — domains, entity types, domain rules, and global rules for the Policy-Contract Agent. */
 import { ENV } from "@/config/env";
 import type {
   CreateDomainPayload,
@@ -12,8 +13,10 @@ import type {
   UpdateRulePayload,
 } from "@/types/policy";
 
+// Base URL for all policy API calls.
 const BASE = `${ENV.API_BASE_URL}/policy`;
 
+// Build JSON + Authorization headers for a given token.
 function headers(token: string): HeadersInit {
   return {
     "Content-Type": "application/json",
@@ -21,6 +24,7 @@ function headers(token: string): HeadersInit {
   };
 }
 
+// Unwrap a fetch Response: throw on error, return undefined for 204 No Content, else parse JSON.
 async function handle<T>(res: Response): Promise<T> {
   if (!res.ok) {
     const text = await res.text();
@@ -32,6 +36,7 @@ async function handle<T>(res: Response): Promise<T> {
 
 // ── Domains ───────────────────────────────────────────────────────────────────
 
+// Fetch all policy domains, optionally filtering to active ones only.
 export async function fetchDomains(
   token: string,
   activeOnly = false,
@@ -42,6 +47,7 @@ export async function fetchDomains(
   return handle(res);
 }
 
+// Fetch a single policy domain with its full entity type list.
 export async function fetchDomain(
   token: string,
   domainId: string,
@@ -52,6 +58,7 @@ export async function fetchDomain(
   return handle(res);
 }
 
+// Create a new policy domain; the LLM auto-suggests entity types after creation.
 export async function createDomain(
   token: string,
   payload: CreateDomainPayload,
@@ -64,6 +71,7 @@ export async function createDomain(
   return handle(res);
 }
 
+// Update a domain's metadata or toggle its active state.
 export async function updateDomain(
   token: string,
   domainId: string,
@@ -77,6 +85,7 @@ export async function updateDomain(
   return handle(res);
 }
 
+// Delete a domain and cascade-delete all its entity types and rules.
 export async function deleteDomain(
   token: string,
   domainId: string,
@@ -90,6 +99,7 @@ export async function deleteDomain(
 
 // ── Entity Type Suggestion ────────────────────────────────────────────────────
 
+// Ask the LLM to suggest relevant entity types given a domain name and description.
 export async function suggestEntityTypes(
   token: string,
   name: string,
@@ -105,6 +115,7 @@ export async function suggestEntityTypes(
 
 // ── Entity Types ──────────────────────────────────────────────────────────────
 
+// Fetch all entity types registered under a domain.
 export async function fetchEntityTypes(
   token: string,
   domainId: string,
@@ -115,6 +126,7 @@ export async function fetchEntityTypes(
   return handle(res);
 }
 
+// Add a single entity type to a domain.
 export async function addEntityType(
   token: string,
   domainId: string,
@@ -128,6 +140,7 @@ export async function addEntityType(
   return handle(res);
 }
 
+// Bulk-add multiple entity types to a domain in a single request.
 export async function addEntityTypesBulk(
   token: string,
   domainId: string,
@@ -141,6 +154,7 @@ export async function addEntityTypesBulk(
   return handle(res);
 }
 
+// Delete a specific entity type from a domain by its ID.
 export async function deleteEntityType(
   token: string,
   domainId: string,
@@ -158,6 +172,7 @@ export async function deleteEntityType(
 
 // ── Domain Rules ──────────────────────────────────────────────────────────────
 
+// Fetch all policy rules associated with a specific domain.
 export async function fetchDomainRules(
   token: string,
   domainId: string,
@@ -168,6 +183,7 @@ export async function fetchDomainRules(
   return handle(res);
 }
 
+// Create a new rule under a domain with conditions and a policy contract.
 export async function createDomainRule(
   token: string,
   domainId: string,
@@ -183,6 +199,7 @@ export async function createDomainRule(
 
 // ── Global Rules ──────────────────────────────────────────────────────────────
 
+// Fetch all global rules that apply across every domain.
 export async function fetchGlobalRules(token: string): Promise<DomainRule[]> {
   const res = await fetch(`${BASE}/global-rules`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -190,6 +207,7 @@ export async function fetchGlobalRules(token: string): Promise<DomainRule[]> {
   return handle(res);
 }
 
+// Create a new global rule (not scoped to any single domain).
 export async function createGlobalRule(
   token: string,
   payload: CreateRulePayload,
@@ -204,6 +222,7 @@ export async function createGlobalRule(
 
 // ── Rule CRUD (by rule id) ────────────────────────────────────────────────────
 
+// Update a rule by ID; supports partial fields including is_active toggle.
 export async function updateRule(
   token: string,
   ruleId: string,
@@ -217,6 +236,7 @@ export async function updateRule(
   return handle(res);
 }
 
+// Delete a rule by ID (works for both domain rules and global rules).
 export async function deleteRule(
   token: string,
   ruleId: string,

@@ -10,18 +10,17 @@ export interface EntityTypeItem {
 
 export interface RuleConditions {
   min_sensitivity: string | null;
-  applicable_roles: string[];   // Miễn trừ: role này thì rule không áp dụng
-  blocked_roles: string[];      // Ép buộc: role này thì rule tự động áp dụng
-  cross_dept_only: boolean;     // Kích hoạt khi tài liệu ở cấp tổ chức cao hơn user
-  applicable_intents: string[]; // Bỏ trống = tất cả
+  applicable_roles: string[];   // Exemption: This rule does not apply to this role.
+  blocked_roles: string[];      // Coercion: For this role, the rule is applied automatically.
+  cross_dept_only: boolean;     // Activated when the document is at a higher organizational level than the user.
+  applicable_intents: string[]; // Leave blank = all.
   min_user_level: number | null;
 }
 
 export interface RuleContract {
-  max_detail: string;            // company|department|project|individual hoặc giá trị tuỳ chỉnh
-  numeric_granularity: string;   // hidden|aggregated|exact hoặc giá trị tuỳ chỉnh
-  allowed_entities: string[];
-  violation_action: string;      // allow|mask|watermark|block hoặc giá trị tuỳ chỉnh
+  max_detail: string;            // company|department|project|individual or custom value
+  numeric_granularity: string;   // hidden|aggregated|exact or custom value
+  violation_action: string;      // allow|mask|watermark|block or custom value
 }
 
 export interface DomainRule {
@@ -29,7 +28,7 @@ export interface DomainRule {
   domain_id: string | null;
   rule_code: string;
   name: string;
-  action: string;   // derived từ violation_action, chỉ dùng nội bộ backend
+  action: string;   // Derived from violation_action, for backend internal use only.
   priority: number;
   mandatory: boolean;
   is_active: boolean;
