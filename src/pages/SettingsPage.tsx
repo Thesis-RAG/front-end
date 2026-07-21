@@ -43,6 +43,13 @@ export default function SettingsPage() {
   const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.0);
   const [ragSaving, setRagSaving] = useState(false);
 
+  const [llmProvider, setLlmProvider] = useState("openai");
+  const [chatModel, setChatModel] = useState("gpt-5.6-terra");
+  const [reasoningEffort, setReasoningEffort] = useState("medium");
+  const [embeddingModel, setEmbeddingModel] = useState("text-embedding-3-small");
+  const [llmSaving, setLlmSaving] = useState(false);
+  const [chatModels, setChatModels] = useState<{ id: string; label: string }[]>([]);
+
   // ── Access control state ─────────────────────────────────────────────
   const [queryScopeMode, setQueryScopeMode] = useState<"full_db" | "branch_only">("full_db");
   const [accessSaving, setAccessSaving] = useState(false);
@@ -70,7 +77,15 @@ export default function SettingsPage() {
         if (data["rag.similarity_threshold"] !== undefined)
           setSimilarityThreshold(Number(data["rag.similarity_threshold"]));
         if (data["query_scope_mode"]) setQueryScopeMode(data["query_scope_mode"]);
+        if (data["llm.provider"]) setLlmProvider(data["llm.provider"]);
+        if (data["llm.chat_model"]) setChatModel(data["llm.chat_model"]);
+        if (data["llm.reasoning_effort"]) setReasoningEffort(data["llm.reasoning_effort"]);
+        if (data["llm.embedding_model"]) setEmbeddingModel(data["llm.embedding_model"]);
       })
+      .catch(() => {});
+    fetch(`${ENV.API_BASE_URL}/settings/models`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((data) => setChatModels(data.chat_models ?? []))
       .catch(() => {});
   }, [token]);
 
@@ -112,6 +127,29 @@ export default function SettingsPage() {
       toast({ title: "Lỗi lưu cấu hình", variant: "destructive" });
     } finally {
       setAccessSaving(false);
+    }
+  };
+
+  const handleSaveLlm = async () => {
+    if (!token) return;
+    setLlmSaving(true);
+    try {
+      const res = await fetch(`${ENV.API_BASE_URL}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          "llm.provider": llmProvider,
+          "llm.chat_model": chatModel,
+          "llm.reasoning_effort": reasoningEffort,
+          "llm.embedding_model": embeddingModel,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast({ title: "Đã lưu cấu hình LLM" });
+    } catch (err) {
+      toast({ title: "Không thể lưu cấu hình LLM", description: String(err), variant: "destructive" });
+    } finally {
+      setLlmSaving(false);
     }
   };
 
@@ -165,6 +203,24 @@ export default function SettingsPage() {
 
       <div className="flex-1 overflow-auto p-6">
         <div className="mx-auto max-w-3xl space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Model LLM</CardTitle>
+              <CardDescription>Chọn model GPT-5+ cho chat. Cấu hình áp dụng ở request kế tiếp.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Provider</Label><Select value={llmProvider} onValueChange={setLlmProvider}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="openai">OpenAI</SelectItem><SelectItem value="ollama">Ollama</SelectItem></SelectContent></Select></div>
+                <div className="space-y-2"><Label>Chat model</Label><Select value={chatModel} onValueChange={setChatModel}><SelectTrigger><SelectValue placeholder="Chọn model" /></SelectTrigger><SelectContent>{chatModels.map((model) => <SelectItem key={model.id} value={model.id}>{model.label} ({model.id})</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2"><Label>Reasoning effort</Label><Select value={reasoningEffort} onValueChange={setReasoningEffort}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["none", "low", "medium", "high", "xhigh", "max"].map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-2"><Label>Embedding model</Label><Select value={embeddingModel} onValueChange={setEmbeddingModel}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="text-embedding-3-small">text-embedding-3-small</SelectItem><SelectItem value="text-embedding-3-large">text-embedding-3-large</SelectItem></SelectContent></Select></div>
+              </div>
+              <p className="text-xs text-muted-foreground">Đổi embedding model nên đi kèm re-index tài liệu cũ.</p>
+              <div><Button onClick={handleSaveLlm} disabled={llmSaving}>{llmSaving ? "Đang lưu..." : "Lưu cấu hình LLM"}</Button></div>
+            </CardContent>
+          </Card>
           {/* ── Google Drive Integration ─────────────────────────────── */}
           <Card>
             <CardHeader>
