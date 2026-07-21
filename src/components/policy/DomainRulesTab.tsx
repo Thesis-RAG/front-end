@@ -793,7 +793,7 @@ export function DomainRulesTab({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full gap-5 px-6 pt-4 pb-6 min-h-0">
+    <div className="flex h-full min-h-[680px] gap-5 px-6 pt-4 pb-6">
 
       {/* ═══ Column 1: Domain selector — full height ══════════════════════════ */}
       <div className="w-80 shrink-0 flex flex-col rounded-xl border border-border bg-card shadow-sm overflow-hidden">

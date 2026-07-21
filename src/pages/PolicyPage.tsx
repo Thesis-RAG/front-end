@@ -369,7 +369,7 @@ export default function PolicyPage() {
             </div>
           </section>
         )}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-[600px] flex-1 flex-col overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-[760px] flex-1 flex-col overflow-visible">
           {/* Tab nav bar — at top */}
           <div className="border-b border-border px-6 shrink-0">
             <TabsList className="mt-2">
@@ -410,8 +410,8 @@ export default function PolicyPage() {
           )}
 
           {/* ── Tab 1: Domains ───────────────────────────────────────────── */}
-          <TabsContent value="domains" className="flex-1 min-h-0 mt-0 overflow-hidden">
-            <div className="flex h-full pt-4 gap-5 px-6">
+          <TabsContent value="domains" className="flex min-h-[680px] flex-1 flex-col mt-0 overflow-hidden">
+            <div className="flex h-full min-h-[680px] flex-1 pt-4 gap-5 px-6">
               <DomainList
                 domains={domains}
                 loading={domainsLoading}
@@ -434,7 +434,7 @@ export default function PolicyPage() {
           </TabsContent>
 
           {/* ── Tab 2: Rules by domain ────────────────────────────────────── */}
-          <TabsContent value="rules" className="flex-1 min-h-0 mt-0 overflow-hidden">
+          <TabsContent value="rules" className="flex min-h-[680px] flex-1 flex-col mt-0 overflow-hidden">
             <DomainRulesTab
               domains={domains}
               rulesDomainId={rulesDomainId}
