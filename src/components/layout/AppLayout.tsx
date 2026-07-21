@@ -1,8 +1,9 @@
-import { Outlet } from 'react-router-dom';
+/** AppLayout: root authenticated shell that guards routes and composes the sidebar with the page outlet. */
+import { Outlet, Navigate } from 'react-router-dom';
 import { AppSidebar } from './AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
 
+// Redirect unauthenticated users to /login; otherwise render sidebar + routed page content.
 export function AppLayout() {
   const { isAuthenticated } = useAuth();
 

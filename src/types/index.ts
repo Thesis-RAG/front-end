@@ -31,6 +31,7 @@ export interface User {
   name: string;
   email: string;
   status: string;
+  created_at?: string;
   oui_positions: OuiPositionInfo[];
   max_clearance: number;
   is_corp_member: boolean;
@@ -47,7 +48,7 @@ export type DocumentStatus =
   | "archived"
   | "ready";
 
-// Sensitivity là số nguyên 1-5
+// Sensitivity is an integer in 1-5.
 export const SENSITIVITY_LEVEL: Record<number, string> = {
   1: "Công khai",
   2: "Nội bộ",
@@ -66,7 +67,7 @@ export const SENSITIVITY_COLOR: Record<number, string> = {
   5: "bg-red-100 text-red-700",
 };
 
-// Giữ lại SensitivityLevel string cho các component cũ chưa migrate
+// Retain the SensitivityLevel string for old components that haven't migrated yet.
 export type SensitivityLevel =
   | "public"
   | "internal"
@@ -92,10 +93,10 @@ export interface Document {
   id: string;
   title: string;
   description?: string;
-  oui_ids: string[];           // multi OUI
+  oui_ids: string[];           // Multi OUI.
   owner_user_id: string;
   document_type: string;
-  sensitivity: number;         // 1-5
+  sensitivity: number;         // 1-5.
   data_type: string;
   tags: string[];
   status: DocumentStatus;
@@ -117,6 +118,13 @@ export interface DocumentVersion {
 
 // ── Chat ──────────────────────────────────────────────────────────────────────
 
+export interface PolicyRule {
+  rule_code: string;
+  name: string;
+  action: string;  // block | conditional | watermark
+  domain: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -127,6 +135,8 @@ export interface ChatMessage {
   status?: "success" | "no_answer" | "no_permission" | "error" | "loading";
   isStreaming?: boolean;
   attachedFileName?: string;
+  appliedRules?: PolicyRule[];
+  mode?: "rag" | "chatbot";
 }
 
 export interface Citation {
@@ -138,6 +148,7 @@ export interface Citation {
   excerpt: string;
   surroundingContext: string;
   relevance?: number;
+  docRestricted?: boolean;
 }
 
 export interface Conversation {

@@ -1,9 +1,11 @@
+/** NotFound: 404 fallback page rendered when no route matches the current path. */
 import { useLocation } from "react-router-dom";
 import { useEffect } from "react";
 
 const NotFound = () => {
   const location = useLocation();
 
+  // Log the missing route to the console to help diagnose broken links.
   useEffect(() => {
     console.error("404 Error: User attempted to access non-existent route:", location.pathname);
   }, [location.pathname]);

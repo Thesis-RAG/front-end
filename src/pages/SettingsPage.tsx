@@ -1,5 +1,5 @@
-// src/pages/SettingsPage.tsx
-import { useState } from "react";
+/** SettingsPage: system configuration – RAG parameters, Drive integration, access control, and notifications. */
+import { useState, useEffect } from "react";
 import {
   Save,
   AlertTriangle,
@@ -31,9 +31,21 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { extractFolderId, listDriveFiles } from "@/services/drive.api";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { ENV } from "@/config/env";
 
 export default function SettingsPage() {
   const { toast } = useToast();
+  const { token } = useAuth();
+
+  // ── RAG settings state ───────────────────────────────────────────────
+  const [topK, setTopK] = useState<number>(5);
+  const [similarityThreshold, setSimilarityThreshold] = useState<number>(0.0);
+  const [ragSaving, setRagSaving] = useState(false);
+
+  // ── Access control state ─────────────────────────────────────────────
+  const [queryScopeMode, setQueryScopeMode] = useState<"full_db" | "branch_only">("full_db");
+  const [accessSaving, setAccessSaving] = useState(false);
 
   // ── Drive state ──────────────────────────────────────────────────────
   const [driveFolderUrl, setDriveFolderUrl] = useState<string>(
@@ -46,6 +58,64 @@ export default function SettingsPage() {
   const [driveFileCount, setDriveFileCount] = useState<number | null>(null);
   const [driveError, setDriveError] = useState<string | null>(null);
 
+  // Load all settings from the server on mount (and whenever token changes).
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${ENV.API_BASE_URL}/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data["rag.top_k"] !== undefined) setTopK(Number(data["rag.top_k"]));
+        if (data["rag.similarity_threshold"] !== undefined)
+          setSimilarityThreshold(Number(data["rag.similarity_threshold"]));
+        if (data["query_scope_mode"]) setQueryScopeMode(data["query_scope_mode"]);
+      })
+      .catch(() => {});
+  }, [token]);
+
+  // ── Handlers ─────────────────────────────────────────────────────────
+
+  // Persist RAG retrieval parameters to the server.
+  const handleSaveRag = async () => {
+    if (!token) return;
+    setRagSaving(true);
+    try {
+      await fetch(`${ENV.API_BASE_URL}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          "rag.top_k": topK,
+          "rag.similarity_threshold": similarityThreshold,
+        }),
+      });
+      toast({ title: "Đã lưu cấu hình RAG" });
+    } catch {
+      toast({ title: "Lỗi lưu cấu hình", variant: "destructive" });
+    } finally {
+      setRagSaving(false);
+    }
+  };
+
+  // Persist the query scope mode to the server.
+  const handleSaveAccess = async () => {
+    if (!token) return;
+    setAccessSaving(true);
+    try {
+      await fetch(`${ENV.API_BASE_URL}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ query_scope_mode: queryScopeMode }),
+      });
+      toast({ title: "Đã lưu cấu hình kiểm soát truy cập" });
+    } catch {
+      toast({ title: "Lỗi lưu cấu hình", variant: "destructive" });
+    } finally {
+      setAccessSaving(false);
+    }
+  };
+
+  // Extract the folder ID from the URL, list its files, and save the URL to localStorage.
   const handleVerifyDrive = async () => {
     const folderId = extractFolderId(driveFolderUrl);
     if (!folderId) {
@@ -70,6 +140,7 @@ export default function SettingsPage() {
     }
   };
 
+  // Remove the saved Drive folder URL and reset all Drive state.
   const handleClearDrive = () => {
     localStorage.removeItem("drive_folder_url");
     setDriveFolderUrl("");
@@ -85,7 +156,7 @@ export default function SettingsPage() {
         title="Cài đặt"
         description="Quản lý cấu hình hệ thống và tích hợp"
         actions={
-          <Button className="gap-2">
+          <Button className="gap-2 bg-gray-900">
             <Save className="h-4 w-4" />
             Lưu thay đổi
           </Button>
@@ -154,7 +225,6 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Status */}
               {driveStatus === "ok" && (
                 <div className="flex items-start gap-2 rounded-lg bg-green-500/10 border border-green-500/20 p-3">
                   <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
@@ -191,37 +261,16 @@ export default function SettingsPage() {
                     variant="ghost"
                     size="sm"
                     onClick={handleClearDrive}
-                    className="ml-auto text-white bg-red-500 hover:text-destructive text-xs"
+                    className="ml-auto text-white bg-red-500 hover:bg-red-600 text-xs"
                   >
                     Xóa cấu hình Drive
                   </Button>
                 )}
               </div>
-
-              {/* Env key note
-              <Alert className="bg-muted/50 border-border">
-                <AlertTriangle className="h-4 w-4 !text-yellow-600" />
-                <AlertTitle className="text-yellow-600 text-xs">
-                  Yêu cầu cấu hình
-                </AlertTitle>
-                <AlertDescription className="text-xs text-muted-foreground">
-                  Tạo API key tại{" "}
-                  <a
-                    href="https://console.cloud.google.com/apis/credentials"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    Google Cloud Console
-                  </a>
-                  , bật Google Drive API và giới hạn truy cập theo HTTP referrer
-                  của ứng dụng.
-                </AlertDescription>
-              </Alert> */}
             </CardContent>
           </Card>
 
-          {/* RAG Settings */}
+          {/* ── RAG Settings ─────────────────────────────────────────── */}
           <Card>
             <CardHeader>
               <CardTitle>Cấu hình RAG</CardTitle>
@@ -233,7 +282,14 @@ export default function SettingsPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="topK">Số kết quả Top-K</Label>
-                  <Input id="topK" type="number" defaultValue={5} />
+                  <Input
+                    id="topK"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={topK}
+                    onChange={(e) => setTopK(Number(e.target.value))}
+                  />
                   <p className="text-xs text-muted-foreground">
                     Số lượng tài liệu được truy xuất cho mỗi câu hỏi
                   </p>
@@ -245,13 +301,23 @@ export default function SettingsPage() {
                   <Input
                     id="similarityThreshold"
                     type="number"
-                    step="0.1"
-                    defaultValue={0.7}
+                    step="0.05"
+                    min={0}
+                    max={1}
+                    value={similarityThreshold}
+                    onChange={(e) => setSimilarityThreshold(Number(e.target.value))}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Điểm tương đồng tối thiểu (0.0 - 1.0)
+                    Chunk có score thấp hơn ngưỡng này sẽ bị loại (0.0 = không lọc)
                   </p>
                 </div>
+              </div>
+              <div className="flex justify-end">
+                <Button className="bg-gray-800 text-[12px]" size="sm" onClick={handleSaveRag} disabled={ragSaving}>
+                  {ragSaving
+                    ? <><Save className="mr-2 h-4 w-4 animate-spin" />Đang lưu...</>
+                    : <><Save className="mr-2 h-4 w-4" />Lưu cấu hình RAG</>}
+                </Button>
               </div>
 
               <div className="space-y-2">
@@ -286,7 +352,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Document Processing */}
+          {/* ── Document Processing ───────────────────────────────────── */}
           <Card>
             <CardHeader>
               <CardTitle>Xử lý tài liệu</CardTitle>
@@ -334,7 +400,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Access Control */}
+          {/* ── Access Control ────────────────────────────────────────── */}
           <Card>
             <CardHeader>
               <CardTitle>Kiểm soát truy cập</CardTitle>
@@ -343,6 +409,52 @@ export default function SettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <div>
+                  <Label>Phạm vi truy vấn RAG</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Tập tài liệu được tìm kiếm khi người dùng đặt câu hỏi
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  {(["full_db", "branch_only"] as const).map((mode) => (
+                    <label
+                      key={mode}
+                      className={cn(
+                        "flex items-start gap-3 rounded-lg border-2 px-4 py-3 cursor-pointer transition-colors",
+                        queryScopeMode === mode
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-muted-foreground/40"
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="queryScopeMode"
+                        value={mode}
+                        checked={queryScopeMode === mode}
+                        onChange={() => setQueryScopeMode(mode)}
+                        className="mt-0.5 accent-primary"
+                      />
+                      <div>
+                        <p className="text-sm font-medium leading-none">
+                          {mode === "full_db" ? "Toàn bộ hệ thống" : "Trong nhánh tổ chức"}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1.5 leading-snug">
+                          {mode === "full_db"
+                            ? "Tìm kiếm tất cả tài liệu trong tổ chức."
+                            : "Chỉ tìm kiếm tài liệu thuộc phạm vi của người dùng."}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <Button className="bg-gray-800 text-[12px]" size="sm" onClick={handleSaveAccess} disabled={accessSaving}>
+                    {accessSaving ? "Đang lưu..." : <><Save className="mr-1.5 h-3.5 w-3.5" />Lưu</>}
+                  </Button>
+                </div>
+              </div>
+
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label>Chế độ chỉ hiển thị tài liệu đã duyệt</Label>
@@ -355,11 +467,11 @@ export default function SettingsPage() {
               </div>
 
               <Alert>
-                <AlertTriangle className="h-4 w-4 !text-yellow-600" />
-                <AlertTitle className="text-yellow-600">
+                <AlertTriangle className="h-4 w-4 mt-6 !text-yellow-600" />
+                <AlertTitle className="text-yellow-600 text-[15px]">
                   Lưu ý về quản trị
                 </AlertTitle>
-                <AlertDescription className="text-yellow-600">
+                <AlertDescription className="text-yellow-600 text-[13px]">
                   Chế độ chỉ hiển thị tài liệu đã duyệt đảm bảo người dùng chỉ
                   thấy nội dung đã được Quản lý Tri thức xem xét và phê duyệt.
                   Khuyến nghị bật cho môi trường production.
@@ -385,7 +497,7 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* Notifications */}
+          {/* ── Notifications ─────────────────────────────────────────── */}
           <Card>
             <CardHeader>
               <CardTitle>Thông báo</CardTitle>

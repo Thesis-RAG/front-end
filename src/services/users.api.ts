@@ -1,17 +1,20 @@
+/** Users API — fetch, create, and update user accounts. */
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
 import type { OuiPositionInfo } from "@/types";
 
+// Full user record including org-unit assignments and max clearance level.
 export interface UserRecord {
   id: string;
   email: string;
   name: string;
   status: "active" | "inactive";
-  oui_positions: OuiPositionInfo[];
-  max_clearance: number;
-  is_corp_member: boolean;
+  oui_positions: OuiPositionInfo[]; // org-unit instances and positions the user belongs to
+  max_clearance: number; // highest clearance level across all assigned positions
+  is_corp_member: boolean; // true if the user is a top-level corporate member
 }
 
+// Fetch all user records visible to the caller.
 export async function fetchUsers(token: string | null): Promise<UserRecord[]> {
   const res = await fetch(`${API_BASE}/users`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -20,6 +23,7 @@ export async function fetchUsers(token: string | null): Promise<UserRecord[]> {
   return res.json();
 }
 
+// Create a new user account with email, display name, and initial password.
 export async function createUser(
   payload: { email: string; name: string; password: string },
   token: string | null,
@@ -39,6 +43,7 @@ export async function createUser(
   return res.json();
 }
 
+// Partially update a user record (e.g., toggle active/inactive status).
 export async function updateUser(
   userId: string,
   payload: { status?: string },

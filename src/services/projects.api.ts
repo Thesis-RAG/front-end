@@ -1,5 +1,7 @@
+/** Projects API — CRUD for projects and their user memberships within departments. */
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+// Represents a project linked to a department.
 export interface Project {
   id: string;
   name: string;
@@ -7,12 +9,14 @@ export interface Project {
   user_count: number;
 }
 
+// Lightweight user record used within project membership lists.
 export interface ProjectUser {
   id: string;
   name: string;
   email: string;
 }
 
+// Fetch all projects, optionally filtered to a specific department.
 export async function fetchProjects(
   token: string | null,
   department_id?: string,
@@ -27,6 +31,7 @@ export async function fetchProjects(
   return res.json();
 }
 
+// Fetch users who are members of a specific project.
 export async function fetchProjectUsers(
   projectId: string,
   token: string | null,
@@ -38,6 +43,7 @@ export async function fetchProjectUsers(
   return res.json();
 }
 
+// Move a project to a different department.
 export async function updateProjectDepartment(
   projectId: string,
   departmentId: string,
@@ -58,6 +64,7 @@ export async function updateProjectDepartment(
   return res.json();
 }
 
+// Replace the user membership list of a project with the given user IDs.
 export async function updateProjectUsers(
   projectId: string,
   userIds: string[],
@@ -78,6 +85,7 @@ export async function updateProjectUsers(
   return res.json();
 }
 
+// Create a new project under a department.
 export async function createProject(
   name: string,
   department_id: string,

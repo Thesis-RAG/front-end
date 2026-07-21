@@ -1,5 +1,7 @@
+/** Audit API — fetch conversation traces and background processing job records. */
 import { ENV } from "@/config/env";
 
+// Represents one RAG conversation trace recorded by the audit system.
 export interface TraceRecord {
   id: string;
   trace_id: string;
@@ -14,6 +16,7 @@ export interface TraceRecord {
   updated_at: string;
 }
 
+// Represents one background processing job (e.g., document ingestion).
 export interface JobRecord {
   id: string;
   job_type: string;
@@ -32,6 +35,7 @@ export interface JobRecord {
   version_no?: number;
 }
 
+// Fetch all conversation trace records for the audit log.
 export async function fetchTraces(token: string): Promise<TraceRecord[]> {
   const res = await fetch(`${ENV.API_BASE_URL}/audit/traces`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -40,6 +44,7 @@ export async function fetchTraces(token: string): Promise<TraceRecord[]> {
   return res.json();
 }
 
+// Fetch all background processing job records.
 export async function fetchJobs(token: string): Promise<JobRecord[]> {
   const res = await fetch(`${ENV.API_BASE_URL}/audit/jobs`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -48,6 +53,7 @@ export async function fetchJobs(token: string): Promise<JobRecord[]> {
   return res.json();
 }
 
+// Retry a failed or stuck processing job by ID.
 export async function retryJob(jobId: string, token: string): Promise<void> {
   const res = await fetch(`${ENV.API_BASE_URL}/audit/jobs/${jobId}/retry`, {
     method: "POST",
@@ -56,6 +62,7 @@ export async function retryJob(jobId: string, token: string): Promise<void> {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
+// Cancel a queued or running processing job by ID.
 export async function cancelJob(jobId: string, token: string): Promise<void> {
   const res = await fetch(`${ENV.API_BASE_URL}/audit/jobs/${jobId}/cancel`, {
     method: "POST",

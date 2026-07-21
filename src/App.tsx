@@ -17,6 +17,7 @@ import ApprovalsPage from "@/pages/ApprovalsPage";
 import UsersPage from "@/pages/UsersPage";
 import AuditPage from "@/pages/AuditPage";
 import SettingsPage from "@/pages/SettingsPage";
+import PolicyPage from "@/pages/PolicyPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -99,6 +100,15 @@ const App = () => (
                 element={
                   <ProtectedRoute permission="settings">
                     <SettingsPage />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/policy"
+                element={
+                  <ProtectedRoute permission="policy.manage">
+                    <PolicyPage />
                   </ProtectedRoute>
                 }
               />

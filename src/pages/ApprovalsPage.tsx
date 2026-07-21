@@ -1,11 +1,10 @@
+/** ApprovalsPage: admin page for reviewing pending documents and managing document access requests. */
 import { useState, useEffect } from "react";
-import { CheckCircle, XCircle, Clock, FileText, Eye } from "lucide-react";
+import { CheckCircle, Clock, FileText, Lock, ShieldCheck } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { SensitivityLevelBadge } from "@/components/ui/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -30,37 +29,27 @@ import {
   rejectDocument,
   updateDocument,
   openDocumentFile,
+  fetchAllAccessRequests,
+  approveAccessRequest,
+  rejectAccessRequest,
+  revokeAccessRequest,
+  AccessRequestRead,
 } from "@/services/documents.api";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { EmptyState } from "@/components/ui/EmptyState";
 import {
   fetchOrgUnits,
   fetchOrgUnitInstances,
   OrgUnit,
   OrgUnitInstance,
 } from "@/services/org_units.api";
-import { SENSITIVITY_LEVEL, SENSITIVITY_COLOR } from "@/types";
+import { SENSITIVITY_LEVEL } from "@/types";
+import { DocRecord, ApprovalCard } from "@/components/approvals/ApprovalCard";
+import { AccessRequestCard } from "@/components/approvals/AccessRequestCard";
+import { GrantedAccessCard } from "@/components/approvals/GrantedAccessCard";
 
-interface DocRecord {
-  id: string;
-  title: string;
-  status: string;
-  sensitivity: number;
-  oui_ids: string[];
-  owner_user_id: string;
-  version_count: number;
-  created_at: string;
-  updated_at: string;
-  current_version_id?: string;
-}
-
-const formatDate = (s: string) =>
-  new Date(s).toLocaleDateString("vi-VN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-
+// Main page component: tab-based view for pending documents, access requests, and granted-access management.
 export default function ApprovalsPage() {
   const { token } = useAuth();
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
@@ -77,6 +66,17 @@ export default function ApprovalsPage() {
     null,
   );
 
+  // Access request state
+  const [accessRequests, setAccessRequests] = useState<AccessRequestRead[]>([]);
+  const [loadingAR, setLoadingAR] = useState(false);
+  const [selectedAR, setSelectedAR] = useState<AccessRequestRead | null>(null);
+  const [arAction, setArAction] = useState<"approve" | "reject" | null>(null);
+  const [arNote, setArNote] = useState("");
+  const [arExpiry, setArExpiry] = useState("");
+  const [submittingAR, setSubmittingAR] = useState(false);
+  const [revokingARId, setRevokingARId] = useState<string | null>(null);
+
+  // Fetch pending document approvals and refresh the list.
   const load = () => {
     setLoading(true);
     fetchPendingApprovals(token)
@@ -87,10 +87,22 @@ export default function ApprovalsPage() {
       .finally(() => setLoading(false));
   };
 
+  // Fetch all access requests and refresh the access-request list.
+  const loadAccessRequests = () => {
+    setLoadingAR(true);
+    fetchAllAccessRequests(token)
+      .then(setAccessRequests)
+      .catch(() => toast({ variant: "destructive", title: "Không thể tải yêu cầu truy cập" }))
+      .finally(() => setLoadingAR(false));
+  };
+
+  // Load documents and access requests on mount.
   useEffect(() => {
     load();
+    loadAccessRequests();
   }, []);
 
+  // Load org units and OUI instances for label resolution in approval cards.
   useEffect(() => {
     fetchOrgUnits(token)
       .then(setOrgUnits)
@@ -100,9 +112,15 @@ export default function ApprovalsPage() {
       .catch(() => {});
   }, []);
 
+  // Derived subsets recomputed on each render.
   const pendingReview = docs.filter((d) => d.status === "review");
   const pendingUploaded = docs.filter((d) => d.status === "uploaded");
+  const approvedAR = accessRequests.filter(
+    (r) => r.status === "approved" && (r.expires_at === null || new Date(r.expires_at) > new Date()),
+  );
+  const pendingAR = accessRequests.filter((r) => r.status === "pending");
 
+  // Open the approve/reject confirmation dialog for a document.
   const handleAction = (doc: DocRecord, type: "approve" | "reject") => {
     setSelected(doc);
     setActionType(type);
@@ -110,6 +128,7 @@ export default function ApprovalsPage() {
     setApproveSensitivity(doc.sensitivity);
   };
 
+  // Open the document file in a new tab via a pre-signed URL.
   const handleView = async (doc: DocRecord) => {
     if (!doc.current_version_id) {
       toast({ variant: "destructive", title: "Chưa có file" });
@@ -122,6 +141,7 @@ export default function ApprovalsPage() {
     }
   };
 
+  // Submit the approve or reject action for the selected document.
   const confirmAction = async () => {
     if (!selected || !actionType) return;
     setSubmitting(true);
@@ -150,62 +170,57 @@ export default function ApprovalsPage() {
     }
   };
 
+  // Revoke an approved access grant after a browser confirmation prompt.
+  const handleRevokeAR = async (req: AccessRequestRead) => {
+    if (!confirm(`Thu hồi quyền truy cập tài liệu "${req.document_title}" của ${req.requester_name}?`)) return;
+    setRevokingARId(req.id);
+    try {
+      await revokeAccessRequest(req.id, token);
+      toast({ variant: "success", title: "Đã thu hồi quyền truy cập" });
+      loadAccessRequests();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Không thể thu hồi", description: err?.message });
+    } finally {
+      setRevokingARId(null);
+    }
+  };
+
+  // Submit the approve or reject action for the selected access request.
+  const confirmARAction = async () => {
+    if (!selectedAR || !arAction) return;
+    setSubmittingAR(true);
+    try {
+      if (arAction === "approve") {
+        await approveAccessRequest(selectedAR.id, token, {
+          admin_note: arNote || undefined,
+          expires_at: arExpiry ? new Date(arExpiry).toISOString() : undefined,
+        });
+        toast({ variant: "success", title: "Đã phê duyệt yêu cầu truy cập" });
+      } else {
+        await rejectAccessRequest(selectedAR.id, token, arNote || undefined);
+        toast({ variant: "success", title: "Đã từ chối yêu cầu truy cập" });
+      }
+      setSelectedAR(null);
+      setArAction(null);
+      loadAccessRequests();
+    } catch {
+      toast({ variant: "destructive", title: "Thao tác thất bại" });
+    } finally {
+      setSubmittingAR(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Phê duyệt"
         description="Xét duyệt tài liệu và phiên bản mới"
       />
-      <div className="flex-1 overflow-auto p-6">
-        {/* Stats */}
-        <div className="mb-6 grid grid-cols-3 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Đang chờ xét duyệt
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">
-                  {pendingReview.length}
-                </span>
-                <Clock className="h-5 w-5 text-status-review" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Đã tải lên (Đang chờ xử lý)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">
-                  {pendingUploaded.length}
-                </span>
-                <FileText className="h-5 w-5 text-status-draft" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Tổng số chờ xử lý
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">{docs.length}</span>
-                <CheckCircle className="h-5 w-5 text-status-approved" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        <Tabs defaultValue="review" className="space-y-4">
-          <TabsList>
+      <Tabs defaultValue="review" className="flex-1 flex flex-col overflow-hidden">
+        {/* Tab bar — top */}
+        <div className="border-b border-border px-6 shrink-0">
+          <TabsList className="mt-2">
             <TabsTrigger value="review" className="gap-2 text-[12.5px]">
               Đang chờ xét duyệt
               {pendingReview.length > 0 && (
@@ -228,9 +243,79 @@ export default function ApprovalsPage() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="access-requests" className="gap-2 text-[12.5px]">
+              Yêu cầu truy cập
+              {pendingAR.length > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-amber-500 text-white"
+                >
+                  {pendingAR.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="granted" className="gap-2 text-[12.5px]">
+              Đã cấp quyền
+              {approvedAR.length > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-green-500 text-white"
+                >
+                  {approvedAR.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
+        </div>
 
-          <TabsContent value="review" className="space-y-4">
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-4 px-6 pt-4 pb-0 shrink-0">
+          {[
+            {
+              label: "Chờ xét duyệt",
+              value: pendingReview.length,
+              icon: Clock,
+              bg: "bg-orange-50 dark:bg-orange-950/40",
+              iconCls: "text-orange-500",
+            },
+            {
+              label: "Đã tải lên (chờ xử lý)",
+              value: pendingUploaded.length,
+              icon: FileText,
+              bg: "bg-yellow-50 dark:bg-yellow-950/40",
+              iconCls: "text-yellow-600",
+            },
+            {
+              label: "Yêu cầu truy cập",
+              value: pendingAR.length,
+              icon: Lock,
+              bg: "bg-blue-50 dark:bg-blue-950/40",
+              iconCls: "text-blue-600",
+            },
+            {
+              label: "Tổng chờ xử lý",
+              value: docs.length,
+              icon: CheckCircle,
+              bg: "bg-green-50 dark:bg-green-950/40",
+              iconCls: "text-green-600",
+            },
+          ].map(({ label, value, icon: Icon, bg, iconCls }) => (
+            <div key={label} className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
+              <div className={`h-11 w-11 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
+                <Icon className={`h-5 w-5 ${iconCls}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[12px] text-muted-foreground font-medium">{label}</p>
+                <p className="text-2xl font-bold text-foreground mt-0.5">
+                  {loading || loadingAR ? "—" : value}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex-1 overflow-auto px-6 pt-4 pb-6">
+          <TabsContent value="review" className="mt-0 space-y-4">
             {loading ? (
               <p className="text-sm text-muted-foreground">Loading...</p>
             ) : pendingReview.length === 0 ? (
@@ -277,8 +362,101 @@ export default function ApprovalsPage() {
               ))
             )}
           </TabsContent>
-        </Tabs>
-      </div>
+
+          <TabsContent value="access-requests" className="space-y-4">
+            {loadingAR ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : accessRequests.length === 0 ? (
+              <EmptyState
+                icon={Lock}
+                title="Không có yêu cầu truy cập nào"
+                description="Chưa có người dùng nào gửi yêu cầu xem tài liệu."
+              />
+            ) : (
+              accessRequests.map((req) => (
+                <AccessRequestCard
+                  key={req.id}
+                  req={req}
+                  onApprove={() => { setSelectedAR(req); setArAction("approve"); setArNote(""); setArExpiry(""); }}
+                  onReject={() => { setSelectedAR(req); setArAction("reject"); setArNote(""); setArExpiry(""); }}
+                />
+              ))
+            )}
+          </TabsContent>
+
+          <TabsContent value="granted" className="space-y-4">
+            {loadingAR ? (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            ) : approvedAR.length === 0 ? (
+              <EmptyState
+                icon={ShieldCheck}
+                title="Chưa có quyền truy cập nào được cấp"
+                description="Các yêu cầu được phê duyệt sẽ xuất hiện ở đây."
+              />
+            ) : (
+              approvedAR.map((req) => (
+                <GrantedAccessCard
+                  key={req.id}
+                  req={req}
+                  onRevoke={() => handleRevokeAR(req)}
+                  revoking={revokingARId === req.id}
+                />
+              ))
+            )}
+          </TabsContent>
+        </div>
+      </Tabs>
+
+      {/* Access Request Action Dialog */}
+      <Dialog open={!!selectedAR} onOpenChange={() => setSelectedAR(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-[20px]">
+              {arAction === "approve" ? "Phê duyệt yêu cầu truy cập" : "Từ chối yêu cầu truy cập"}
+            </DialogTitle>
+            <DialogDescription className="text-[12px]">
+              Tài liệu: <strong>{selectedAR?.document_title ?? selectedAR?.document_id}</strong>
+              {" · "}Người yêu cầu: <strong>{selectedAR?.requester_name ?? selectedAR?.user_id}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            {arAction === "approve" && (
+              <div>
+                <Label className="text-[13px]">Thời hạn truy cập (tùy chọn)</Label>
+                <Input
+                  type="datetime-local"
+                  value={arExpiry}
+                  onChange={(e) => setArExpiry(e.target.value)}
+                  className="mt-2 text-[12px]"
+                  placeholder="Để trống = không giới hạn thời gian"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">Để trống nếu không muốn giới hạn thời gian</p>
+              </div>
+            )}
+            <div>
+              <Label className="text-[13px]">
+                {arAction === "reject" ? "Lý do từ chối (tùy chọn)" : "Ghi chú (tùy chọn)"}
+              </Label>
+              <Textarea
+                value={arNote}
+                onChange={(e) => setArNote(e.target.value)}
+                placeholder={arAction === "reject" ? "Giải thích lý do..." : "Thêm ghi chú..."}
+                className="mt-2 text-[12px]"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedAR(null)}>Hủy</Button>
+            <Button
+              variant={arAction === "approve" ? "default" : "destructive"}
+              onClick={confirmARAction}
+              disabled={submittingAR}
+            >
+              {submittingAR ? "Đang xử lý..." : arAction === "approve" ? "Phê duyệt" : "Từ chối"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
         <DialogContent>
@@ -302,7 +480,7 @@ export default function ApprovalsPage() {
                 className="text-[12px] text-muted-foreground items-center flex gap-1"
               >
                 <div className="mr-1">{selected?.title}</div>
-                <code className="ml-1text-sm text-muted-foreground">
+                <code className="ml-1 text-sm text-muted-foreground">
                   • v{selected?.version_count}
                 </code>
               </Badge>
@@ -371,116 +549,3 @@ export default function ApprovalsPage() {
   );
 }
 
-function ApprovalCard({
-  doc,
-  orgUnits,
-  ouis,
-  onApprove,
-  onReject,
-  onView,
-}: {
-  doc: DocRecord;
-  orgUnits: OrgUnit[];
-  ouis: OrgUnitInstance[];
-  onApprove: () => void;
-  onReject: () => void;
-  onView: () => void;
-}) {
-  const getOuiLabel = (ouiId: string) => {
-    const oui = ouis.find((o) => o.id === ouiId);
-    const ou = orgUnits.find((u) => u.id === oui?.ou_id);
-    return oui ? `${ou?.name ?? ""} / ${oui.name}` : ouiId.slice(0, 8);
-  };
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-medium text-[15px]">{doc.title}</span>
-              {/* ← thay SensitivityLevelBadge bằng: */}
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${SENSITIVITY_COLOR[doc.sensitivity] ?? "bg-gray-100 text-gray-700"}`}
-              >
-                {SENSITIVITY_LEVEL[doc.sensitivity] ?? doc.sensitivity}
-              </span>
-            </div>
-            <div className="flex flex-row items-center gap-4 my-2">
-              <div className="text-[12px]">Đơn vị:</div>
-              {doc.oui_ids.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {doc.oui_ids.map((id) => (
-                    <Badge
-                      key={id}
-                      variant="secondary"
-                      className="text-[11px] font-normal"
-                    >
-                      {getOuiLabel(id)}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground mb-2">
-              <span className="text-[12px] font-semibold">
-                Phiên bản:{" "}
-                <code className="rounded bg-muted px-1">
-                  v{doc.version_count}
-                </code>
-              </span>
-              <span>·</span>
-              <span className="text-[12px] font-semibold">Cập nhật cuối:</span>
-              <span className="text-[11.5px]">
-                {formatDate(doc.updated_at)}
-              </span>
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground font-mono">
-              ID: {doc.id.slice(0, 30)}...
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onView}
-              className="text-xs bg-green-100 text-green-700 hover:bg-green-200 hover:text-green-800"
-            >
-              <Eye className="mr-1.5 h-4 w-4" /> Xem tài liệu
-            </Button>
-            <Button size="sm" onClick={onApprove} className="text-xs">
-              <CheckCircle className="mr-1.5 h-4 w-4" />
-              Xét duyệt
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onReject}
-              className="text-xs hover:bg-gray-100 hover:text-black"
-            >
-              <XCircle className="mr-1.5 h-4 w-4" />
-              Từ chối
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function EmptyState({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="rounded-lg border border-dashed border-border p-12 text-center">
-      <Icon className="mx-auto h-12 w-12 text-muted-foreground" />
-      <h3 className="mt-4 font-medium">{title}</h3>
-      <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-    </div>
-  );
-}

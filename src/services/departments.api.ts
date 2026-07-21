@@ -1,12 +1,15 @@
+/** Departments API — CRUD for organizational department records. */
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
 
+// Represents a department along with its aggregate counts.
 export interface Department {
   id: string;
   name: string;
   project_count: number;
-  user_count: number; 
+  user_count: number;
 }
 
+// Fetch all departments.
 export async function fetchDepartments(
   token: string | null,
 ): Promise<Department[]> {
@@ -17,6 +20,7 @@ export async function fetchDepartments(
   return res.json();
 }
 
+// Create a new department with the given name.
 export async function createDepartment(
   name: string,
   token: string | null,

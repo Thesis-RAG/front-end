@@ -12,46 +12,44 @@ const statusConfig: Record<
 > = {
   draft: {
     label: "Bản nháp",
-    className: "bg-status-draft/15 text-status-draft border-status-draft/30",
+    className: "bg-gray-100 text-gray-600",
   },
   uploaded: {
     label: "Đã tải lên",
-    className: "bg-yellow-100 text-yellow-700 border-yellow-200",
+    className: "bg-yellow-100 text-yellow-700",
   },
   processing: {
     label: "Đang xử lý",
-    className: "bg-purple-100 text-purple-700 border-purple-200",
+    className: "bg-purple-100 text-purple-700",
   },
   review: {
     label: "Đang xét duyệt",
-    className: "bg-status-review/15 text-status-review border-status-review/30",
+    className: "bg-orange-100 text-orange-700",
   },
   approved: {
     label: "Đã duyệt",
-    className:
-      "bg-status-approved/15 text-status-approved border-status-approved/30",
+    className: "bg-green-100 text-green-700",
   },
   archived: {
     label: "Đã lưu trữ",
-    className:
-      "bg-status-archived/15 text-status-archived border-status-archived/30",
+    className: "bg-gray-100 text-gray-500",
   },
   ready: {
-    className: "bg-blue-100 text-blue-700 border-blue-200",
     label: "Sẵn sàng",
+    className: "bg-blue-100 text-blue-700",
   },
 };
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
   const config = statusConfig[status] ?? {
     label: status,
-    className: "bg-gray-100 text-gray-600 border-gray-200",
+    className: "bg-gray-100 text-gray-600",
   };
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
         config.className,
         className,
       )}
@@ -67,50 +65,28 @@ interface SensitivityLevelBadgeProps {
 }
 
 const sensitivityLevelConfig = {
-  1: {
-    label: "Công khai",
-    className:
-      "bg-sensitivity_level-public/15 text-sensitivity_level-public border-sensitivity_level-public/30",
-  },
-  2: {
-    label: "Nội bộ",
-    className:
-      "bg-sensitivity_level-internal/15 text-sensitivity_level-internal border-sensitivity_level-internal/30",
-  },
-  3: {
-    label: "Hạn chế",
-    className:
-      "bg-sensitivity_level-confidential/15 text-sensitivity_level-confidential border-sensitivity_level-confidential/30",
-  },
-  4: {
-    label: "Mật",
-    className:
-      "bg-sensitivity_level-restricted/15 text-sensitivity_level-restricted border-sensitivity_level-restricted/30",
-  },
-  5: {
-    label: "Tuyệt mật",
-    className:
-      "bg-sensitivity_level-top_secret/15 text-sensitivity_level-top_secret border-sensitivity_level-top_secret/30",
-  },
+  1: { label: "Công khai", className: "bg-green-100 text-green-700" },
+  2: { label: "Nội bộ",   className: "bg-blue-100 text-blue-700" },
+  3: { label: "Hạn chế",  className: "bg-yellow-100 text-yellow-700" },
+  4: { label: "Mật",      className: "bg-orange-100 text-orange-700" },
+  5: { label: "Tuyệt mật",className: "bg-red-100 text-red-700" },
 };
 
 export function SensitivityLevelBadge({
   level,
   className,
 }: SensitivityLevelBadgeProps) {
-  console.log("level =", level, "type =", typeof level);
   const config = sensitivityLevelConfig[level];
-  console.log("config =", config);
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
-        config.className,
+        "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
+        config?.className ?? "bg-gray-100 text-gray-600",
         className,
       )}
     >
-      {config.label}
+      {config?.label ?? level}
     </span>
   );
 }
