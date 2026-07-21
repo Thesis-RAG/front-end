@@ -116,9 +116,9 @@ export function AppSidebar() {
   );
 
   return (
-    <aside className="flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border">
+    <aside className="flex h-screen w-64 shrink-0 flex-col bg-sidebar border-r border-sidebar-border shadow-card-md">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border shrink-0">
+      <div className="flex h-[4.5rem] items-center gap-3 px-5 border-b border-sidebar-border shrink-0">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sidebar-primary to-blue-500 shadow-md shadow-blue-500/20">
           <Building2 className="h-5 w-5 text-white" />
         </div>
@@ -126,14 +126,14 @@ export function AppSidebar() {
           <span className="text-sm font-bold text-sidebar-accent-foreground tracking-tight">
             KnowledgeHub
           </span>
-          <span className="text-[11px] text-sidebar-muted truncate">
-            Hệ thống RAG doanh nghiệp
+          <span className="text-[10px] text-sidebar-muted truncate uppercase tracking-wider">
+            Enterprise knowledge platform
           </span>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2.5 scrollbar-thin">
+      <nav className="flex-1 overflow-y-auto py-5 px-3 scrollbar-thin">
         <ul className="space-y-0.5">
           {filteredNavItems.map((item) => {
             const Icon = item.icon;
@@ -144,7 +144,7 @@ export function AppSidebar() {
                 <NavLink
                   to={item.path}
                   className={cn(
-                    "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150",
+                    "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150",
                     isActive
                       ? "bg-gradient-to-r from-sidebar-primary/25 to-sidebar-primary/10 text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/40 hover:text-sidebar-accent-foreground",

@@ -34,6 +34,8 @@ import {
   USER_LEVEL_OPTIONS, csvToArray, arrayToCsv,
 } from "./constants";
 import { toast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { fetchPositions } from "@/services/org_units.api";
 
 // ── Violation action display ──────────────────────────────────────────────────
 const ACTION_STYLE: Record<string, { bg: string; iconCls: string; Icon: React.ElementType }> = {
@@ -201,12 +203,21 @@ function ConditionsSection({
   domainEntityTypes?: EntityTypeItem[];
   lockedRoles?: string[];
 }) {
+  const { token } = useAuth();
+  const [organizationRoles, setOrganizationRoles] = useState<string[]>([]);
   const [roleOpen, setRoleOpen]     = useState(false);
   const [roleQuery, setRoleQuery]   = useState("");
   const [blockedOpen, setBlockedOpen]   = useState(false);
   const [blockedQuery, setBlockedQuery] = useState("");
   const [showCustomIntent, setShowCustomIntent] = useState(false);
   const [customIntent, setCustomIntent] = useState("");
+
+  useEffect(() => {
+    if (!token) return;
+    fetchPositions(token)
+      .then((items) => setOrganizationRoles(Array.from(new Set(items.map((item) => item.name).filter(Boolean)))))
+      .catch(() => setOrganizationRoles([]));
+  }, [token]);
 
   function setC<K extends keyof RuleConditions>(key: K, val: RuleConditions[K]) {
     setForm(f => f ? { ...f, conditions: { ...f.conditions, [key]: val } } : f);
@@ -215,12 +226,48 @@ function ConditionsSection({
   const extras = form.conditions.applicable_roles.filter(r => !lockedRoles.includes(r));
   const allIntents = Array.from(new Set([...DEFAULT_INTENT_OPTIONS, ...form.conditions.applicable_intents]));
 
-  const roleSuggestions = POSITION_SUGGESTIONS.filter(
-    s => !form.conditions.applicable_roles.includes(s) && s.toLowerCase().includes(roleQuery.toLowerCase())
+  const availableRoles = Array.from(new Set([
+    ...organizationRoles,
+    ...POSITION_SUGGESTIONS,
+    ...form.conditions.applicable_roles,
+    ...form.conditions.blocked_roles,
+  ]));
+  const roleSuggestions = availableRoles.filter(
+    s => !form.conditions.applicable_roles.includes(s) && !form.conditions.blocked_roles.includes(s) && s.toLowerCase().includes(roleQuery.toLowerCase())
   );
-  const blockedSuggestions = POSITION_SUGGESTIONS.filter(
-    s => !form.conditions.blocked_roles.includes(s) && s.toLowerCase().includes(blockedQuery.toLowerCase())
+  const blockedSuggestions = availableRoles.filter(
+    s => !form.conditions.blocked_roles.includes(s) && !form.conditions.applicable_roles.includes(s) && s.toLowerCase().includes(blockedQuery.toLowerCase())
   );
+
+  function addRole(role: string, mode: "exempt" | "force") {
+    const value = role.trim();
+    if (!value) return;
+    setForm((current) => {
+      if (!current) return current;
+      if (mode === "exempt") {
+        return {
+          ...current,
+          conditions: {
+            ...current.conditions,
+            applicable_roles: current.conditions.applicable_roles.includes(value)
+              ? current.conditions.applicable_roles
+              : [...current.conditions.applicable_roles, value],
+            blocked_roles: current.conditions.blocked_roles.filter((item) => item !== value),
+          },
+        };
+      }
+      return {
+        ...current,
+        conditions: {
+          ...current.conditions,
+          blocked_roles: current.conditions.blocked_roles.includes(value)
+            ? current.conditions.blocked_roles
+            : [...current.conditions.blocked_roles, value],
+          applicable_roles: current.conditions.applicable_roles.filter((item) => item !== value),
+        },
+      };
+    });
+  }
 
   function addCustomIntent() {
     const v = customIntent.trim();
@@ -280,7 +327,7 @@ function ConditionsSection({
         {/* Allowed roles */}
         <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-2.5">
           <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
-            Vị trí được phép <Info className="h-3 w-3" />
+            Vai trò được miễn áp dụng <Info className="h-3 w-3" />
           </Label>
           {lockedRoles.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -310,7 +357,7 @@ function ConditionsSection({
                         if (e.key === "Escape") { setRoleOpen(false); setRoleQuery(""); }
                         if (e.key === "Enter" && roleQuery.trim()) {
                           const r = roleQuery.trim();
-                          if (!form.conditions.applicable_roles.includes(r)) setC("applicable_roles", [...form.conditions.applicable_roles, r]);
+                          addRole(r, "exempt");
                           setRoleQuery(""); setRoleOpen(false);
                         }
                       }}
@@ -321,7 +368,7 @@ function ConditionsSection({
                       ? <p className="px-3 py-2 text-[11px] text-muted-foreground">Không tìm thấy</p>
                       : roleSuggestions.map(s => (
                         <button key={s} type="button"
-                          onClick={() => { setC("applicable_roles", [...form.conditions.applicable_roles, s]); setRoleQuery(""); setRoleOpen(false); }}
+                          onClick={() => { addRole(s, "exempt"); setRoleQuery(""); setRoleOpen(false); }}
                           className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-muted transition-colors"
                         >{s}</button>
                       ))
@@ -348,7 +395,7 @@ function ConditionsSection({
         {/* Blocked roles */}
         <div className="rounded-xl border border-border bg-muted/10 p-4 space-y-2.5">
           <Label className="text-[11px] text-muted-foreground flex items-center gap-1">
-            Vị trí bị chặn <Info className="h-3 w-3" />
+            Bắt buộc áp dụng cho vai trò <Info className="h-3 w-3" />
           </Label>
           {form.conditions.blocked_roles.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -381,7 +428,7 @@ function ConditionsSection({
                         if (e.key === "Escape") { setBlockedOpen(false); setBlockedQuery(""); }
                         if (e.key === "Enter" && blockedQuery.trim()) {
                           const r = blockedQuery.trim();
-                          if (!form.conditions.blocked_roles.includes(r)) setC("blocked_roles", [...form.conditions.blocked_roles, r]);
+                          addRole(r, "force");
                           setBlockedQuery(""); setBlockedOpen(false);
                         }
                       }}
@@ -392,7 +439,7 @@ function ConditionsSection({
                       ? <p className="px-3 py-2 text-[11px] text-muted-foreground">Không tìm thấy</p>
                       : blockedSuggestions.map(s => (
                         <button key={s} type="button"
-                          onClick={() => { setC("blocked_roles", [...form.conditions.blocked_roles, s]); setBlockedQuery(""); setBlockedOpen(false); }}
+                          onClick={() => { addRole(s, "force"); setBlockedQuery(""); setBlockedOpen(false); }}
                           className="w-full text-left px-3 py-1.5 text-[11px] hover:bg-muted transition-colors"
                         >{s}</button>
                       ))
@@ -665,7 +712,7 @@ export function DomainRulesTab({
   // ── Filtered + sorted rules ────────────────────────────────────────────────
   const filteredRules = useMemo(() => {
     const q = ruleSearch.trim().toLowerCase();
-    let list = q
+    const list = q
       ? domainRules.filter(r => r.name.toLowerCase().includes(q) || r.rule_code.toLowerCase().includes(q))
       : [...domainRules];
     if (sortBy === "priority") list.sort((a, b) => b.priority - a.priority);
@@ -698,7 +745,13 @@ export function DomainRulesTab({
         priority: editForm.priority,
         mandatory: editForm.mandatory,
         audit_log: editForm.audit_log,
-        conditions: editForm.conditions,
+        conditions: {
+          ...editForm.conditions,
+          applicable_roles: Array.from(new Set([...(lockedRoles ?? []), ...editForm.conditions.applicable_roles])),
+          blocked_roles: editForm.conditions.blocked_roles.filter(
+            (role) => !(lockedRoles ?? []).includes(role) && !editForm.conditions.applicable_roles.includes(role),
+          ),
+        },
         contract: editForm.contract,
       });
       toast({ title: "Đã lưu thay đổi", variant: "success" as any });
@@ -838,7 +891,7 @@ export function DomainRulesTab({
             <div className="px-3 pt-3 pb-2 border-b border-border/40 shrink-0 space-y-2">
               <div className="flex mb-5 items-center justify-between">
                 <h3 className="text-[12.5px] font-semibold">Danh sách luật</h3>
-                <Button size="sm" className="h-7 text-[11px] bg-gray-800 gap-1 px-2.5" onClick={() => setCreateOpen(true)}>
+                <Button size="sm" className="h-7 text-[11px] bg-primary text-primary-foreground hover:bg-primary/90 gap-1 px-2.5" onClick={() => setCreateOpen(true)}>
                   <Plus className="h-3 w-3" /> Tạo luật mới
                 </Button>
               </div>
@@ -941,7 +994,7 @@ export function DomainRulesTab({
                 <div className="flex items-center gap-1">
                   <Button variant="outline" size="icon" className="h-6 w-6 text-[11px]" disabled={safePage === 1} onClick={() => setCurrentPage(p => p - 1)}>‹</Button>
                   {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(p => (
-                    <Button key={p} variant="outline" size="icon" className={`h-6 w-6 text-[11px] ${p === safePage ? "bg-black text-white border-black" : ""}`} onClick={() => setCurrentPage(p)}>{p}</Button>
+                    <Button key={p} variant="outline" size="icon" className={`h-6 w-6 text-[11px] ${p === safePage ? "bg-primary text-primary-foreground border-primary" : ""}`} onClick={() => setCurrentPage(p)}>{p}</Button>
                   ))}
                   <Button variant="outline" size="icon" className="h-6 w-6 text-[11px]" disabled={safePage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>›</Button>
                 </div>
@@ -1163,7 +1216,7 @@ export function DomainRulesTab({
             {/* Footer */}
             <div className="px-5 py-3 border-t border-border/60 flex items-center justify-end gap-2 shrink-0">
               <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleCancel}>Hủy</Button>
-              <Button size="sm" className="h-8 text-xs bg-black hover:bg-gray-800 text-white" onClick={handleSave} disabled={saving}>
+              <Button size="sm" className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleSave} disabled={saving}>
                 {saving ? "Đang lưu..." : "Lưu thay đổi"}
               </Button>
             </div>

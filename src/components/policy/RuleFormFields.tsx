@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import type { EntityTypeItem, RuleConditions, RuleContract } from "@/types/policy";
 import { useAuth } from "@/contexts/AuthContext";
-import { fetchOrgUnitInstances, type OrgUnitInstance } from "@/services/org_units.api";
+import { fetchOrgUnitInstances, fetchPositions, type OrgUnitInstance, type Position } from "@/services/org_units.api";
 import {
   DEFAULT_INTENT_OPTIONS,
   INTENT_LABEL,
@@ -51,6 +51,7 @@ export function RuleFormFields({
 }: RuleFormFieldsProps) {
   const { token } = useAuth();
   const [orgUnitInstances, setOrgUnitInstances] = useState<OrgUnitInstance[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [customIntentInput, setCustomIntentInput] = useState("");
   // combobox mode: true = manual input, false = pick from list
   const [customViolation, setCustomViolation] = useState(
@@ -67,7 +68,15 @@ export function RuleFormFields({
 
   useEffect(() => {
     if (!token) return;
-    fetchOrgUnitInstances(token).then(setOrgUnitInstances).catch(() => setOrgUnitInstances([]));
+    Promise.all([fetchOrgUnitInstances(token), fetchPositions(token)])
+      .then(([loadedOuis, loadedPositions]) => {
+        setOrgUnitInstances(loadedOuis);
+        setPositions(loadedPositions);
+      })
+      .catch(() => {
+        setOrgUnitInstances([]);
+        setPositions([]);
+      });
   }, [token]);
 
   const setCondition = <K extends keyof RuleConditions>(
@@ -82,6 +91,41 @@ export function RuleFormFields({
   ) => setForm((f) => ({ ...f, contract: { ...f.contract, [key]: value } }));
 
   const entityLabels = domainEntityTypes.map((e) => e.entity_type);
+  const roleOptions = Array.from(new Set([
+    ...positions.map((position) => position.name),
+    ...form.conditions.applicable_roles,
+    ...form.conditions.blocked_roles,
+  ])).filter(Boolean).sort((a, b) => a.localeCompare(b));
+
+  function toggleRole(role: string, mode: "exempt" | "force") {
+    setForm((current) => {
+      const conditions = current.conditions;
+      if (mode === "exempt") {
+        const selected = conditions.applicable_roles.includes(role);
+        return {
+          ...current,
+          conditions: {
+            ...conditions,
+            applicable_roles: selected
+              ? conditions.applicable_roles.filter((item) => item !== role)
+              : [...conditions.applicable_roles, role],
+            blocked_roles: conditions.blocked_roles.filter((item) => item !== role),
+          },
+        };
+      }
+      const selected = conditions.blocked_roles.includes(role);
+      return {
+        ...current,
+        conditions: {
+          ...conditions,
+          blocked_roles: selected
+            ? conditions.blocked_roles.filter((item) => item !== role)
+            : [...conditions.blocked_roles, role],
+          applicable_roles: conditions.applicable_roles.filter((item) => item !== role),
+        },
+      };
+    });
+  }
 
   // All available intents (defaults + any custom ones already added).
   const allIntents = Array.from(
@@ -230,7 +274,7 @@ export function RuleFormFields({
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-1.5">
             <Label className="text-xs text-muted-foreground">
-              Vị trí được phép
+              Vai trò được miễn áp dụng
             </Label>
 
             {/* Locked roles — always included, cannot be removed */}
@@ -247,6 +291,22 @@ export function RuleFormFields({
                 ))}
               </div>
             )}
+
+            <div className="rounded-lg border border-border bg-background p-2.5 space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Chọn từ danh sách vai trò</p>
+              {roleOptions.filter((role) => !lockedRoles.includes(role)).length > 0 ? (
+                <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+                  {roleOptions.filter((role) => !lockedRoles.includes(role)).map((role) => {
+                    const selected = form.conditions.applicable_roles.includes(role);
+                    return (
+                      <button key={`exempt-${role}`} type="button" aria-pressed={selected} onClick={() => toggleRole(role, "exempt")} className={`rounded-full border px-2.5 py-1 text-[10px] transition-colors ${selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:border-primary/60"}`}>
+                        {selected ? "✓ " : ""}{role}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : <p className="text-[10px] text-muted-foreground">Chưa tải được danh sách vai trò; bạn vẫn có thể nhập thủ công bên dưới.</p>}
+            </div>
 
             {/* Editable additional roles (non-locked only) */}
             <Input
@@ -271,8 +331,23 @@ export function RuleFormFields({
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs text-muted-foreground">
-              Vị trí bị chặn (bắt buộc áp dụng quy tắc)
+              Bắt buộc áp dụng cho vai trò
             </Label>
+            <div className="rounded-lg border border-border bg-background p-2.5 space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Chọn từ danh sách vai trò</p>
+              {roleOptions.filter((role) => !lockedRoles.includes(role)).length > 0 ? (
+                <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
+                  {roleOptions.filter((role) => !lockedRoles.includes(role)).map((role) => {
+                    const selected = form.conditions.blocked_roles.includes(role);
+                    return (
+                      <button key={`force-${role}`} type="button" aria-pressed={selected} onClick={() => toggleRole(role, "force")} className={`rounded-full border px-2.5 py-1 text-[10px] transition-colors ${selected ? "border-amber-600 bg-amber-600 text-white" : "border-border bg-background text-muted-foreground hover:border-amber-500/60"}`}>
+                        {selected ? "✓ " : ""}{role}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : <p className="text-[10px] text-muted-foreground">Chưa có vai trò từ cơ cấu tổ chức.</p>}
+            </div>
             <Input
               placeholder="VD: Guest, Contractor"
               value={arrayToCsv(form.conditions.blocked_roles)}

@@ -369,7 +369,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button className="bg-gray-800 text-[12px]" size="sm" onClick={handleSaveRag} disabled={ragSaving}>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90 text-[12px]" size="sm" onClick={handleSaveRag} disabled={ragSaving}>
                   {ragSaving
                     ? <><Save className="mr-2 h-4 w-4 animate-spin" />Đang lưu...</>
                     : <><Save className="mr-2 h-4 w-4" />Lưu cấu hình RAG</>}
@@ -505,7 +505,7 @@ export default function SettingsPage() {
                   ))}
                 </div>
                 <div className="flex justify-end">
-                  <Button className="bg-gray-800 text-[12px]" size="sm" onClick={handleSaveAccess} disabled={accessSaving}>
+                  <Button className="bg-primary text-primary-foreground hover:bg-primary/90 text-[12px]" size="sm" onClick={handleSaveAccess} disabled={accessSaving}>
                     {accessSaving ? "Đang lưu..." : <><Save className="mr-1.5 h-3.5 w-3.5" />Lưu</>}
                   </Button>
                 </div>

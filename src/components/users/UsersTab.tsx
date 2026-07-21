@@ -321,13 +321,13 @@ export function UsersTab({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[30%] font-bold text-black">
+              <TableHead className="w-[30%] font-bold text-foreground">
                 Người dùng
               </TableHead>
-              <TableHead className="font-bold text-black">
+              <TableHead className="font-bold text-foreground">
                 Đơn vị & Vị trí
               </TableHead>
-              <TableHead className="font-bold text-black">Trạng thái</TableHead>
+              <TableHead className="font-bold text-foreground">Trạng thái</TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
@@ -491,7 +491,7 @@ export function UsersTab({
                 onClick={() => setCurrentPage(p as number)}
                 className={`flex h-8 w-8 items-center justify-center rounded-md border text-xs font-medium transition-colors ${
                   p === safePage
-                    ? "bg-black text-white border-black"
+                    ? "bg-primary text-primary-foreground border-primary"
                     : "border-border bg-background text-foreground hover:bg-muted"
                 }`}
               >

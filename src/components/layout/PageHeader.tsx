@@ -17,7 +17,7 @@ interface PageHeaderProps {
 // Renders a sticky header with breadcrumb nav, page title/description, and an optional actions toolbar.
 export function PageHeader({ title, description, breadcrumbs, actions }: PageHeaderProps) {
   return (
-    <header className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur-sm px-6 py-4 shadow-card">
+    <header className="sticky top-0 z-10 border-b border-border/80 bg-background/90 px-8 py-5 backdrop-blur-md shadow-card">
       {breadcrumbs && breadcrumbs.length > 0 && (
         <nav className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
           {breadcrumbs.map((item, index) => (
@@ -36,7 +36,7 @@ export function PageHeader({ title, description, breadcrumbs, actions }: PageHea
       )}
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight">{title}</h1>
+          <h1 className="text-xl font-semibold text-foreground tracking-tight">{title}</h1>
           {description && (
             <p className="mt-0.5 text-[13px] text-muted-foreground leading-relaxed">{description}</p>
           )}

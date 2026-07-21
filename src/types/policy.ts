@@ -106,6 +106,10 @@ export interface RuleTemplate {
   template_code: string;
   name: string;
   description: string;
+  category: string;
+  department: string;
+  document_types: string[];
+  recommended: boolean;
   rule: CreateRulePayload;
 }
 

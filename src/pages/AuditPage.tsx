@@ -389,18 +389,18 @@ function QueryLogsTab() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="font-bold text-black">Thời gian</TableHead>
-              <TableHead className="font-bold text-black">
+              <TableHead className="font-bold text-foreground">Thời gian</TableHead>
+              <TableHead className="font-bold text-foreground">
                 ID Nhân viên
               </TableHead>
-              <TableHead className="font-bold text-black w-[35%]">
+              <TableHead className="font-bold text-foreground w-[35%]">
                 Query
               </TableHead>
-              <TableHead className="font-bold text-black">Trạng thái</TableHead>
-              <TableHead className="font-bold text-black text-center">Tài liệu</TableHead>
-              <TableHead className="font-bold text-black text-center">Nguồn</TableHead>
-              <TableHead className="font-bold text-black text-center">Độ trễ</TableHead>
-              <TableHead className="font-bold text-black">Trace ID</TableHead>
+              <TableHead className="font-bold text-foreground">Trạng thái</TableHead>
+              <TableHead className="font-bold text-foreground text-center">Tài liệu</TableHead>
+              <TableHead className="font-bold text-foreground text-center">Nguồn</TableHead>
+              <TableHead className="font-bold text-foreground text-center">Độ trễ</TableHead>
+              <TableHead className="font-bold text-foreground">Trace ID</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -648,16 +648,16 @@ function JobsTab() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-black font-bold">Job ID</TableHead>
-              <TableHead className="text-black font-bold">Loại</TableHead>
-              <TableHead className="text-black font-bold w-[40%]">
+              <TableHead className="text-foreground font-bold">Job ID</TableHead>
+              <TableHead className="text-foreground font-bold">Loại</TableHead>
+              <TableHead className="text-foreground font-bold w-[40%]">
                 Tài liệu
               </TableHead>
-              <TableHead className="text-black font-bold">Trạng thái</TableHead>
-              <TableHead className="text-black font-bold">Lần thử</TableHead>
-              <TableHead className="text-black font-bold">Bắt đầu</TableHead>
-              <TableHead className="text-black font-bold">Kết thúc</TableHead>
-              <TableHead className="text-black font-bold w-[8%]">
+              <TableHead className="text-foreground font-bold">Trạng thái</TableHead>
+              <TableHead className="text-foreground font-bold">Lần thử</TableHead>
+              <TableHead className="text-foreground font-bold">Bắt đầu</TableHead>
+              <TableHead className="text-foreground font-bold">Kết thúc</TableHead>
+              <TableHead className="text-foreground font-bold w-[8%]">
                 Hành động
               </TableHead>
             </TableRow>

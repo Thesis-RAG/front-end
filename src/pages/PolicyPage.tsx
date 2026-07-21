@@ -83,18 +83,28 @@ export default function PolicyPage() {
   const [globalRulesLoading, setGlobalRulesLoading] = useState(false);
   const [rulesDomainId, setRulesDomainId] = useState<string>("");
   const [ruleTemplates, setRuleTemplates] = useState<RuleTemplate[]>([]);
+  const [selectedTemplateCodes, setSelectedTemplateCodes] = useState<Set<string>>(new Set());
   const [installingTemplates, setInstallingTemplates] = useState(false);
 
   useEffect(() => {
     if (!token) return;
-    fetchRuleTemplates(token).then(setRuleTemplates).catch(() => setRuleTemplates([]));
+    fetchRuleTemplates(token)
+      .then((items) => {
+        setRuleTemplates(items);
+        setSelectedTemplateCodes(new Set(items.filter((item) => item.recommended).map((item) => item.template_code)));
+      })
+      .catch(() => setRuleTemplates([]));
   }, [token]);
 
-  async function handleInstallRecommendedRules() {
+  async function handleInstallSelectedRules() {
     if (!token) return;
+    if (selectedTemplateCodes.size === 0) {
+      toast({ title: "Chưa chọn rule", description: "Hãy tích chọn ít nhất một rule template.", variant: "destructive" });
+      return;
+    }
     setInstallingTemplates(true);
     try {
-      const result = await installRuleTemplates(token);
+      const result = await installRuleTemplates(token, Array.from(selectedTemplateCodes));
       toast({ title: "Đã cài bộ rule mặc định", description: `${result.created.length} rule mới; ${result.skipped.length} rule đã tồn tại.` });
       const globals = await fetchGlobalRules(token);
       setGlobalRules(globals);
@@ -106,6 +116,15 @@ export default function PolicyPage() {
   }
 
   // ── Load domains ──────────────────────────────────────────────────────────
+  function toggleTemplate(code: string) {
+    setSelectedTemplateCodes((current) => {
+      const next = new Set(current);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
+
   const loadDomains = useCallback(async () => {
     if (!token) return;
     setDomainsLoading(true);
@@ -325,9 +344,24 @@ export default function PolicyPage() {
                 <p className="text-sm font-semibold">Bộ rules dựng sẵn cho doanh nghiệp</p>
                 <p className="text-xs text-muted-foreground mt-1">Cài một lần thành global rules có thể sửa/xóa như rule thủ công. Rule lương và rule thông tin cá nhân sẽ được xử lý độc lập theo từng trường.</p>
               </div>
-              <Button size="sm" onClick={handleInstallRecommendedRules} disabled={installingTemplates}>
-                {installingTemplates ? "Đang cài..." : "Cài bộ khuyến nghị"}
+              <Button size="sm" onClick={handleInstallSelectedRules} disabled={installingTemplates || selectedTemplateCodes.size === 0}>
+                {installingTemplates ? "Đang cài..." : `Cài ${selectedTemplateCodes.size} rule`}
               </Button>
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-[11px]">
+              <span className="text-muted-foreground">Đã chọn {selectedTemplateCodes.size}/{ruleTemplates.length} rule</span>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setSelectedTemplateCodes(new Set(ruleTemplates.filter((item) => item.recommended).map((item) => item.template_code)))}>Chọn bộ khuyến nghị</Button>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setSelectedTemplateCodes(new Set())}>Bỏ chọn tất cả</Button>
+            </div>
+            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-80 overflow-y-auto">
+              {ruleTemplates.map((template) => (
+                <label key={`select-${template.template_code}`} className={`cursor-pointer rounded-md border px-3 py-2 ${selectedTemplateCodes.has(template.template_code) ? "border-primary bg-primary/10" : "bg-background"}`}>
+                  <div className="flex items-start gap-2">
+                    <input type="checkbox" className="mt-0.5" checked={selectedTemplateCodes.has(template.template_code)} onChange={() => toggleTemplate(template.template_code)} />
+                    <div className="min-w-0"><p className="text-[11px] font-medium">{template.name}</p><p className="text-[10px] text-muted-foreground">{template.department} · {template.category}</p></div>
+                  </div>
+                </label>
+              ))}
             </div>
             <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
               {ruleTemplates.map((template) => <div key={template.template_code} className="rounded-md border bg-background px-3 py-2"><p className="text-[11px] font-medium">{template.name}</p><p className="text-[10px] text-muted-foreground mt-0.5">{template.description}</p></div>)}

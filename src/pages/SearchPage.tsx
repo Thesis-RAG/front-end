@@ -270,7 +270,7 @@ export default function SearchPage() {
             <Button
               onClick={() => handleSearch()}
               disabled={!query.trim() || isSearching}
-              className="text-[12px] bg-black hover:bg-gray-700 text-white gap-2 h-9"
+              className="text-[12px] bg-primary text-primary-foreground hover:bg-primary/90 gap-2 h-9"
             >
               {isSearching ? "Đang tìm kiếm..." : "Tìm kiếm"}
             </Button>
