@@ -119,6 +119,9 @@ export const DEFAULT_CONDITIONS: RuleConditions = {
   cross_dept_only: false,
   applicable_intents: [],
   min_user_level: null,
+  target_entity_types: [],
+  target_flags: [],
+  applicable_oui_ids: [],
 };
 
 export const DEFAULT_CONTRACT: RuleContract = {

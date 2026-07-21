@@ -157,14 +157,12 @@ export async function rejectDocument(
 
 // Fetch all documents currently awaiting approval (status = "review" | "uploaded").
 export async function fetchPendingApprovals(token: string) {
-  const res = await fetch(`${ENV.API_BASE_URL}/documents`, {
+  const res = await fetch(`${ENV.API_BASE_URL}/documents/pending-approvals`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const docs = await res.json();
-  return docs.filter(
-    (d: any) => d.status === "review" || d.status === "uploaded",
-  );
+  return docs.filter((d: any) => d.status === "review" || d.status === "uploaded");
 }
 
 // Return the count of documents pending review (used for the notification badge).

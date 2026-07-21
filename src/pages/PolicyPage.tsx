@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from "react";
 import { ShieldCheck, ListChecks, Globe, FolderOpen, Package, BookLock } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import type {
@@ -14,6 +15,7 @@ import type {
   EntityTypeItem,
   PolicyDomain,
   PolicyDomainSummary,
+  RuleTemplate,
 } from "@/types/policy";
 import {
   fetchDomains,
@@ -29,6 +31,8 @@ import {
   createGlobalRule,
   updateRule,
   deleteRule,
+  fetchRuleTemplates,
+  installRuleTemplates,
 } from "@/services/policy.api";
 import { fetchOrgUnits, fetchPositions } from "@/services/org_units.api";
 import { DomainList } from "@/components/policy/DomainList";
@@ -78,6 +82,28 @@ export default function PolicyPage() {
   const [rulesLoading, setRulesLoading] = useState(false);
   const [globalRulesLoading, setGlobalRulesLoading] = useState(false);
   const [rulesDomainId, setRulesDomainId] = useState<string>("");
+  const [ruleTemplates, setRuleTemplates] = useState<RuleTemplate[]>([]);
+  const [installingTemplates, setInstallingTemplates] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    fetchRuleTemplates(token).then(setRuleTemplates).catch(() => setRuleTemplates([]));
+  }, [token]);
+
+  async function handleInstallRecommendedRules() {
+    if (!token) return;
+    setInstallingTemplates(true);
+    try {
+      const result = await installRuleTemplates(token);
+      toast({ title: "Đã cài bộ rule mặc định", description: `${result.created.length} rule mới; ${result.skipped.length} rule đã tồn tại.` });
+      const globals = await fetchGlobalRules(token);
+      setGlobalRules(globals);
+    } catch (err) {
+      toast({ title: "Không thể cài bộ rule", description: String(err), variant: "destructive" });
+    } finally {
+      setInstallingTemplates(false);
+    }
+  }
 
   // ── Load domains ──────────────────────────────────────────────────────────
   const loadDomains = useCallback(async () => {
@@ -292,6 +318,22 @@ export default function PolicyPage() {
       />
 
       <div className="flex-1 overflow-hidden flex flex-col">
+        {ruleTemplates.length > 0 && (
+          <div className="mx-6 mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 shrink-0">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold">Bộ rules dựng sẵn cho doanh nghiệp</p>
+                <p className="text-xs text-muted-foreground mt-1">Cài một lần thành global rules có thể sửa/xóa như rule thủ công. Rule lương và rule thông tin cá nhân sẽ được xử lý độc lập theo từng trường.</p>
+              </div>
+              <Button size="sm" onClick={handleInstallRecommendedRules} disabled={installingTemplates}>
+                {installingTemplates ? "Đang cài..." : "Cài bộ khuyến nghị"}
+              </Button>
+            </div>
+            <div className="mt-3 grid grid-cols-2 lg:grid-cols-4 gap-2">
+              {ruleTemplates.map((template) => <div key={template.template_code} className="rounded-md border bg-background px-3 py-2"><p className="text-[11px] font-medium">{template.name}</p><p className="text-[10px] text-muted-foreground mt-0.5">{template.description}</p></div>)}
+            </div>
+          </div>
+        )}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
           {/* Tab nav bar — at top */}
           <div className="border-b border-border px-6 shrink-0">

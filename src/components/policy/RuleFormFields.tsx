@@ -1,6 +1,6 @@
 /** Shared rule form used by both the create/edit dialog and the inline edit row. */
 import type { Dispatch, SetStateAction } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { EntityTypeItem, RuleConditions, RuleContract } from "@/types/policy";
+import { useAuth } from "@/contexts/AuthContext";
+import { fetchOrgUnitInstances, type OrgUnitInstance } from "@/services/org_units.api";
 import {
   DEFAULT_INTENT_OPTIONS,
   INTENT_LABEL,
@@ -47,6 +49,8 @@ export function RuleFormFields({
   domainEntityTypes = [],
   lockedRoles = [],
 }: RuleFormFieldsProps) {
+  const { token } = useAuth();
+  const [orgUnitInstances, setOrgUnitInstances] = useState<OrgUnitInstance[]>([]);
   const [customIntentInput, setCustomIntentInput] = useState("");
   // combobox mode: true = manual input, false = pick from list
   const [customViolation, setCustomViolation] = useState(
@@ -60,6 +64,11 @@ export function RuleFormFields({
   const [customNumeric, setCustomNumeric] = useState(
     !NUMERIC_OPTIONS.some((o) => o.value === form.contract.numeric_granularity),
   );
+
+  useEffect(() => {
+    if (!token) return;
+    fetchOrgUnitInstances(token).then(setOrgUnitInstances).catch(() => setOrgUnitInstances([]));
+  }, [token]);
 
   const setCondition = <K extends keyof RuleConditions>(
     key: K,
@@ -334,6 +343,59 @@ export function RuleFormFields({
             >
               + Thêm
             </button>
+          </div>
+        </div>
+
+        {/* Field scope and department scope */}
+        <div className="rounded-md border border-dashed p-3 grid gap-3 bg-background/60">
+          <div>
+            <Label className="text-xs text-muted-foreground">Phạm vi trường thông tin</Label>
+            <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+              Để trống nếu rule áp dụng cho toàn bộ chunk. Chọn ví dụ <b>money</b> cho lương và <b>email/phone/person</b> cho thông tin cá nhân.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(entityLabels.length ? entityLabels : ["money", "email", "phone", "person_name", "address"]).map((label) => {
+              const checked = form.conditions.target_entity_types.includes(label);
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setCondition("target_entity_types", checked
+                    ? form.conditions.target_entity_types.filter((item) => item !== label)
+                    : [...form.conditions.target_entity_types, label])}
+                  className={`px-2.5 py-1 rounded-full text-[10px] border ${checked ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border"}`}
+                >{label}</button>
+              );
+            })}
+          </div>
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Hoặc chọn nhóm dữ liệu</Label>
+            <div className="flex flex-wrap gap-2">
+              {["has_financial", "has_pii", "has_hr", "has_credential", "has_legal", "has_strategic"].map((flag) => {
+                const checked = form.conditions.target_flags.includes(flag);
+                return (
+                  <button key={flag} type="button" onClick={() => setCondition("target_flags", checked
+                    ? form.conditions.target_flags.filter((item) => item !== flag)
+                    : [...form.conditions.target_flags, flag])}
+                    className={`px-2.5 py-1 rounded-full text-[10px] border ${checked ? "bg-amber-500 text-white border-amber-500" : "bg-background text-muted-foreground border-border"}`}>
+                    {flag}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Phòng ban áp dụng</Label>
+            <select
+              multiple
+              value={form.conditions.applicable_oui_ids}
+              onChange={(event) => setCondition("applicable_oui_ids", Array.from(event.target.selectedOptions, (option) => option.value))}
+              className="min-h-20 rounded-md border border-input bg-background px-2 py-1 text-[11px]"
+            >
+              {orgUnitInstances.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <p className="text-[10px] text-muted-foreground/70">Giữ Ctrl để chọn nhiều phòng ban; để trống = toàn công ty.</p>
           </div>
         </div>
 

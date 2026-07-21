@@ -15,6 +15,9 @@ export interface RuleConditions {
   cross_dept_only: boolean;     // Activated when the document is at a higher organizational level than the user.
   applicable_intents: string[]; // Leave blank = all.
   min_user_level: number | null;
+  target_entity_types: string[]; // Empty = whole chunk; otherwise field/entity scope.
+  target_flags: string[];        // Empty = no boolean-flag filter.
+  applicable_oui_ids: string[];  // Empty = every department.
 }
 
 export interface RuleContract {
@@ -97,6 +100,13 @@ export interface CreateRulePayload {
 
 export interface UpdateRulePayload extends Partial<CreateRulePayload> {
   is_active?: boolean;
+}
+
+export interface RuleTemplate {
+  template_code: string;
+  name: string;
+  description: string;
+  rule: CreateRulePayload;
 }
 
 export interface SuggestEntitiesResponse {
