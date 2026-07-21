@@ -451,7 +451,7 @@ export default function PolicyPage() {
           </TabsContent>
 
           {/* ── Tab 3: Global rules ───────────────────────────────────────── */}
-          <TabsContent value="global-rules" className="flex-1 min-h-0 mt-0 overflow-hidden">
+          <TabsContent value="global-rules" className="flex min-h-0 flex-1 flex-col mt-0 overflow-hidden">
             <GlobalRulesTab
               globalRules={globalRules}
               loading={globalRulesLoading}
