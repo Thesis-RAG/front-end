@@ -1,5 +1,7 @@
 /** Projects API — CRUD for projects and their user memberships within departments. */
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+import { ENV } from "@/config/env";
+
+const API_BASE = ENV.API_BASE_URL;
 
 // Represents a project linked to a department.
 export interface Project {

@@ -1,5 +1,7 @@
 /** Departments API — CRUD for organizational department records. */
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+import { ENV } from "@/config/env";
+
+const API_BASE = ENV.API_BASE_URL;
 
 // Represents a department along with its aggregate counts.
 export interface Department {

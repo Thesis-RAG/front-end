@@ -1,5 +1,7 @@
 /** Users API — fetch, create, and update user accounts. */
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+import { ENV } from "@/config/env";
+
+const API_BASE = ENV.API_BASE_URL;
 
 import type { OuiPositionInfo } from "@/types";
 

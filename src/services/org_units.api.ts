@@ -1,5 +1,7 @@
 /** Org Units API — manage OU types, OUI instances, positions, and user assignments. */
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "";
+import { ENV } from "@/config/env";
+
+const API_BASE = ENV.API_BASE_URL;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
