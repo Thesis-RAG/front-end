@@ -344,7 +344,7 @@ export function ChatInput({
                 aria-label="Gửi"
                 onClick={handleSubmit}
                 disabled={!message.trim() || disabled}
-                className="h-8 w-8 shrink-0 rounded-lg shadow-sm disabled:opacity-40 bg-gray-900 hover:bg-gray-800 text-white border-0"
+                className="h-8 w-8 shrink-0 rounded-lg shadow-sm disabled:opacity-40 bg-primary hover:bg-primary/90 text-primary-foreground border-0"
               >
                 <Send className="h-3.5 w-3.5" />
               </Button>

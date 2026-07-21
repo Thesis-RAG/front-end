@@ -137,7 +137,7 @@ export function DomainDetail({
                     variant="ghost"
                     size="sm"
                     onClick={onSuggestForExisting}
-                    className="h-8 text-[11px] gap-1.5 bg-black text-white hover:bg-gray-700 "
+                    className="h-8 text-[11px] gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90"
                   >
                     <Sparkles className="h-3 w-3" /> Gợi ý AI
                   </Button>

@@ -7,7 +7,7 @@
 @layer base {
   :root {
     /* Background colors */
-    --background: 210 20% 98%;
+    --background: 215 33% 97%;
     --foreground: 222 47% 11%;
 
     /* Card/surfaces */
@@ -24,20 +24,20 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Primary - Black */
-    --primary: 0 0% 9%;
+    /* Primary - enterprise blue */
+    --primary: 221 83% 53%;
     --primary-foreground: 0 0% 100%;
 
     /* Secondary */
-    --secondary: 220 14% 96%;
+    --secondary: 214 32% 94%;
     --secondary-foreground: 222 47% 11%;
 
     /* Muted */
-    --muted: 220 14% 96%;
+    --muted: 214 28% 94%;
     --muted-foreground: 220 9% 46%;
 
     /* Accent */
-    --accent: 220 14% 93%;
+    --accent: 214 32% 91%;
     --accent-foreground: 222 47% 11%;
 
     /* Destructive */
@@ -45,11 +45,11 @@
     --destructive-foreground: 0 0% 100%;
 
     /* Border/Input/Ring */
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 220 13% 70%;
+    --border: 214 24% 88%;
+    --input: 214 24% 84%;
+    --ring: 221 83% 53%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
     /* Sidebar - Dark slate */
     --sidebar-background: 222 47% 11%;
@@ -95,8 +95,8 @@
     --popover: 222 47% 8%;
     --popover-foreground: 220 14% 96%;
 
-    --primary: 0 0% 95%;
-    --primary-foreground: 0 0% 9%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
 
     --secondary: 222 40% 14%;
     --secondary-foreground: 220 14% 96%;
@@ -132,6 +132,10 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
   }
 
   html {
@@ -185,6 +189,16 @@
     background: hsl(var(--card) / 0.8);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
+  }
+
+  .enterprise-page {
+    background:
+      radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.06), transparent 28rem),
+      hsl(var(--background));
+  }
+
+  .enterprise-section-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground;
   }
 }
 

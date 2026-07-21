@@ -36,17 +36,19 @@ export function RuleDialog({
   const [form, setForm] = useState<RuleFormState>(() =>
     initialFormFromRule(initial),
   );
+  const lockedRolesKey = lockedRoles.join("\u0000");
 
   // Sync form and always inject locked roles.
   useEffect(() => {
     const base = initialFormFromRule(initial);
-    if (lockedRoles.length > 0) {
+    const stableLockedRoles = lockedRolesKey ? lockedRolesKey.split("\u0000") : [];
+    if (stableLockedRoles.length > 0) {
       base.conditions.applicable_roles = Array.from(
-        new Set([...lockedRoles, ...base.conditions.applicable_roles]),
+        new Set([...stableLockedRoles, ...base.conditions.applicable_roles]),
       );
     }
     setForm(base);
-  }, [initial, open]);
+  }, [initial, lockedRolesKey, open]);
 
   async function handleSave() {
     if (!form.rule_code.trim() || !form.name.trim()) {
@@ -59,12 +61,18 @@ export function RuleDialog({
     }
     setSaving(true);
     // Always ensure locked roles are present in the payload.
+    const exemptRoles = Array.from(
+      new Set([...lockedRoles, ...form.conditions.applicable_roles]),
+    );
     const payload: CreateRulePayload = {
       ...form,
       conditions: {
         ...form.conditions,
-        applicable_roles: Array.from(
-          new Set([...lockedRoles, ...form.conditions.applicable_roles]),
+        applicable_roles: exemptRoles,
+        // A role must have one unambiguous policy meaning. Exemption wins
+        // here because locked company roles are always exempt by design.
+        blocked_roles: form.conditions.blocked_roles.filter(
+          (role) => !exemptRoles.includes(role),
         ),
       },
     };

@@ -313,7 +313,7 @@ export default function DocumentsPage() {
         actions={
           canEdit && (
             <Button
-              className="gap-2 bg-black text-white hover:bg-gray-700 focus:ring-gray-400"
+              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary"
               onClick={() => {
                 resetUploadForm();
                 setUploadDialogOpen(true);

@@ -135,7 +135,7 @@ export function UploadDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button className="bg-gray-800" disabled={!selectedFile || uploading} onClick={onUpload}>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90" disabled={!selectedFile || uploading} onClick={onUpload}>
             {uploading ? "Đang tải lên..." : "Tải lên"}
           </Button>
         </DialogFooter>
