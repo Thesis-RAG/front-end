@@ -32,7 +32,7 @@ export function DomainList({
   onCreateClick,
 }: DomainListProps) {
   return (
-    <div className="w-80 shrink-0 flex flex-col rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+    <div className="w-80 min-h-0 shrink-0 flex flex-col rounded-xl border border-border bg-card shadow-sm overflow-hidden">
       {/* Header */}
       <div className="px-4 pt-7 pb-2 flex items-center justify-between">
         <h2 className="text-[14px] font-semibold">Danh sách miền</h2>

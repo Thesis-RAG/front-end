@@ -102,17 +102,6 @@ export interface UpdateRulePayload extends Partial<CreateRulePayload> {
   is_active?: boolean;
 }
 
-export interface RuleTemplate {
-  template_code: string;
-  name: string;
-  description: string;
-  category: string;
-  department: string;
-  document_types: string[];
-  recommended: boolean;
-  rule: CreateRulePayload;
-}
-
 export interface SuggestEntitiesResponse {
   entity_types: { entity_type: string; label_vi?: string }[];
 }

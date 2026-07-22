@@ -3,10 +3,9 @@
  * Split into components under src/components/policy/ to keep this file concise.
  */
 import { useState, useEffect, useCallback } from "react";
-import { Check, ShieldCheck, ListChecks, FolderOpen, Package, Sparkles } from "lucide-react";
+import { ShieldCheck, ListChecks, FolderOpen, Package } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import type {
@@ -15,7 +14,6 @@ import type {
   EntityTypeItem,
   PolicyDomain,
   PolicyDomainSummary,
-  RuleTemplate,
 } from "@/types/policy";
 import {
   fetchDomains,
@@ -29,8 +27,6 @@ import {
   createDomainRule,
   updateRule,
   deleteRule,
-  fetchRuleTemplates,
-  installRuleTemplates,
 } from "@/services/policy.api";
 import { fetchOrgUnits, fetchPositions } from "@/services/org_units.api";
 import { DomainList } from "@/components/policy/DomainList";
@@ -77,62 +73,8 @@ export default function PolicyPage() {
   const [domainRules, setDomainRules] = useState<DomainRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
   const [rulesDomainId, setRulesDomainId] = useState<string>("");
-  const [ruleTemplates, setRuleTemplates] = useState<RuleTemplate[]>([]);
-  const [selectedTemplateCodes, setSelectedTemplateCodes] = useState<Set<string>>(new Set());
-  const [installingTemplates, setInstallingTemplates] = useState(false);
-
-  useEffect(() => {
-    if (!token) return;
-    fetchRuleTemplates(token)
-      .then((items) => {
-        setRuleTemplates(items);
-        setSelectedTemplateCodes(new Set(items.filter((item) => item.recommended).map((item) => item.template_code)));
-      })
-      .catch(() => setRuleTemplates([]));
-  }, [token]);
-
-  async function handleInstallSelectedRules() {
-    if (!token) return;
-    if (selectedTemplateCodes.size === 0) {
-      toast({ title: "Chưa chọn rule", description: "Hãy tích chọn ít nhất một rule template.", variant: "destructive" });
-      return;
-    }
-    setInstallingTemplates(true);
-    try {
-      if (!rulesDomainId) {
-        toast({ title: "Chưa chọn miền", description: "Hãy chọn miền trước khi cài bộ rule.", variant: "destructive" });
-        return;
-      }
-      const result = await installRuleTemplates(token, Array.from(selectedTemplateCodes), rulesDomainId);
-      toast({ title: "Đã cài bộ rule mặc định", description: `${result.created.length} rule mới; ${result.skipped.length} rule đã tồn tại.` });
-    } catch (err) {
-      toast({ title: "Không thể cài bộ rule", description: String(err), variant: "destructive" });
-    } finally {
-      setInstallingTemplates(false);
-    }
-  }
 
   // ── Load domains ──────────────────────────────────────────────────────────
-  function toggleTemplate(code: string) {
-    setSelectedTemplateCodes((current) => {
-      const next = new Set(current);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
-    });
-  }
-
-  function getTemplateScopeLabels(template: RuleTemplate) {
-    const conditions = template.rule.conditions;
-    const scopes = [
-      ...conditions.target_entity_types,
-      ...conditions.target_flags,
-    ].filter(Boolean);
-
-    if (scopes.length === 0) return ["Toàn bộ đoạn nội dung"];
-    return scopes.map((scope) => scope.replace(/_/g, " "));
-  }
-
   const loadDomains = useCallback(async () => {
     if (!token) return;
     setDomainsLoading(true);
@@ -307,59 +249,8 @@ export default function PolicyPage() {
         description="Quản lý miền, loại thực thể và luật cho Policy-Contract Agent."
       />
 
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col scrollbar-thin">
-        {ruleTemplates.length > 0 && (
-          <section className="mx-6 mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-sm shrink-0">
-            <div className="flex items-start gap-4 p-4">
-              <div className="flex min-w-0 flex-1 items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">Bộ rules dựng sẵn cho doanh nghiệp</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Chọn các rule cần áp dụng cho miền đang chọn. Mỗi rule có thể tiếp tục chỉnh sửa hoặc xóa như rule thủ công; rule lương và thông tin cá nhân được xử lý độc lập theo từng trường.</p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                className="shrink-0 gap-1.5"
-                onClick={handleInstallSelectedRules}
-                disabled={installingTemplates || selectedTemplateCodes.size === 0 || !rulesDomainId}
-                title={!rulesDomainId ? "Chọn miền trong tab Luật theo miền trước" : undefined}
-              >
-                {!installingTemplates && <Check className="h-3.5 w-3.5" />}
-                {installingTemplates ? "Đang cài..." : `Áp dụng ${selectedTemplateCodes.size} rule`}
-              </Button>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-4 pt-3 text-[11px]">
-              <span className="text-muted-foreground">Đã chọn {selectedTemplateCodes.size}/{ruleTemplates.length} rule</span>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setSelectedTemplateCodes(new Set(ruleTemplates.filter((item) => item.recommended).map((item) => item.template_code)))}>Chọn bộ khuyến nghị</Button>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setSelectedTemplateCodes(new Set())}>Bỏ chọn tất cả</Button>
-            </div>
-            <div className="grid max-h-[30rem] grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 pt-3 pr-3 scrollbar-thin md:grid-cols-2 lg:grid-cols-3">
-              {ruleTemplates.map((template) => (
-                <label key={`select-${template.template_code}`} className={`group cursor-pointer rounded-xl border p-3 transition-all ${selectedTemplateCodes.has(template.template_code) ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 bg-background hover:border-primary/40 hover:shadow-sm"}`}>
-                  <div className="flex items-start gap-2">
-                    <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" checked={selectedTemplateCodes.has(template.template_code)} onChange={() => toggleTemplate(template.template_code)} />
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold leading-snug">{template.name}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{template.department} · {template.category}</p>
-                      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/90">{template.description}</p>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {getTemplateScopeLabels(template).map((scope) => (
-                          <span key={`${template.template_code}-${scope}`} className="rounded-md bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
-                            {scope}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </section>
-        )}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-[720px] flex-none flex-col overflow-visible">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-thin">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col overflow-visible">
           {/* Tab nav bar — at top */}
           <div className="border-b border-border px-6 shrink-0">
             <TabsList className="mt-2">
@@ -398,11 +289,11 @@ export default function PolicyPage() {
           {/* ── Tab 1: Domains ───────────────────────────────────────────── */}
           <TabsContent
             value="domains"
-            className="flex min-h-[720px] flex-none flex-col mt-0 overflow-visible"
+            className="mt-0 flex min-h-[520px] flex-1 flex-col overflow-hidden md:min-h-[560px]"
             style={{ display: activeTab === "domains" ? "flex" : "none" }}
           >
             <div
-              className="flex h-full min-h-[720px] flex-none pt-4 gap-5 px-6"
+              className="flex min-h-0 flex-1 gap-5 px-6 pt-4 pb-6"
               style={{ display: activeTab === "domains" ? "flex" : "none" }}
             >
               <DomainList
@@ -429,12 +320,12 @@ export default function PolicyPage() {
           {/* ── Tab 2: Rules by domain ────────────────────────────────────── */}
           <TabsContent
             value="rules"
-            className="flex min-h-[720px] flex-none flex-col mt-0 overflow-visible"
+            className="mt-0 flex min-h-[520px] flex-1 flex-col overflow-hidden md:min-h-[560px]"
             style={{ display: activeTab === "rules" ? "flex" : "none" }}
           >
             <div
-              className="h-full min-h-[720px]"
-              style={{ display: activeTab === "rules" ? "block" : "none" }}
+              className="flex min-h-0 flex-1"
+              style={{ display: activeTab === "rules" ? "flex" : "none" }}
             >
               <DomainRulesTab
                 domains={domains}

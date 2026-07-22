@@ -11,29 +11,10 @@ import type {
   SuggestEntitiesResponse,
   UpdateDomainPayload,
   UpdateRulePayload,
-  RuleTemplate,
 } from "@/types/policy";
 
 // Base URL for all policy API calls.
 const BASE = `${ENV.API_BASE_URL}/policy`;
-
-export async function fetchRuleTemplates(token: string): Promise<RuleTemplate[]> {
-  const res = await fetch(`${BASE}/rule-templates`, { headers: { Authorization: `Bearer ${token}` } });
-  return handle(res);
-}
-
-export async function installRuleTemplates(
-  token: string,
-  templateCodes: string[] = [],
-  domainId: string,
-): Promise<{ created: DomainRule[]; skipped: string[] }> {
-  const res = await fetch(`${BASE}/rule-templates/install`, {
-    method: "POST",
-    headers: headers(token),
-    body: JSON.stringify({ template_codes: templateCodes, domain_id: domainId }),
-  });
-  return handle(res);
-}
 
 // Build JSON + Authorization headers for a given token.
 function headers(token: string): HeadersInit {

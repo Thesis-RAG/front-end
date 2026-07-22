@@ -793,10 +793,10 @@ export function DomainRulesTab({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex h-full min-h-[720px] gap-5 px-6 pt-4 pb-6">
+    <div className="flex h-full min-h-0 flex-1 gap-5 px-6 pt-4 pb-6">
 
       {/* ═══ Column 1: Domain selector — full height ══════════════════════════ */}
-      <div className="w-80 shrink-0 flex flex-col rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="w-80 min-h-0 shrink-0 flex flex-col rounded-xl border border-border bg-card shadow-sm overflow-hidden">
         <div className="px-4 pt-7 pb-4 flex items-center justify-between shrink-0">
           <h2 className="text-[14px] font-semibold">Miền dữ liệu</h2>
           <LayoutList className="h-4 w-4 text-muted-foreground" />
@@ -852,7 +852,7 @@ export function DomainRulesTab({
       {/* ═══ Right area: stats + (rule list | detail) ════════════════════════ */}
       <div className="flex-1 flex flex-col gap-4 min-w-0 min-h-0">
 
-        {/* 5 stat cards — spans full width of right area */}
+        {/* Stat cards — spans full width of right area */}
         <div className="grid grid-cols-4 gap-4 shrink-0">
           {[
             { label: "Tổng luật",      value: domainRules.length, Icon: List,     bg: "bg-blue-50 dark:bg-blue-950/40",   iconCls: "text-blue-600",  sub: rulesDomainId ? "trong miền đã chọn" : "chọn miền để xem" },

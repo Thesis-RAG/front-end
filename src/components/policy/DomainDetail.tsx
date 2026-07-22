@@ -41,7 +41,7 @@ export function DomainDetail({
   onAddEntityClick,
 }: DomainDetailProps) {
   return (
-    <div className="flex-1 flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+    <div className="min-h-0 flex-1 flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
       <div className="flex-1 overflow-y-auto pt-6 px-6 pb-6">
         {!selectedDomainId ? (
           <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3 select-none">
