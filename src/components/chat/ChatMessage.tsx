@@ -17,6 +17,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { normalizeMarkdownTables } from "@/lib/markdown-tables";
 import { ChatMessage as ChatMessageType, Citation, PolicyRule } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -146,7 +147,9 @@ export function ChatMessage({
 
   const WATERMARK_MARKER = "\n\n---\n⚠️";
   const wmIdx = !isUser ? message.content.indexOf(WATERMARK_MARKER) : -1;
-  const mainContent = wmIdx >= 0 ? message.content.slice(0, wmIdx) : message.content;
+  const mainContent = normalizeMarkdownTables(
+    wmIdx >= 0 ? message.content.slice(0, wmIdx) : message.content,
+  );
   const hasWatermarkRule = !isUser && Array.isArray(message.appliedRules) &&
     (message.appliedRules as PolicyRule[]).some((r) => r.action === "watermark");
   const hasWatermarkBanner = wmIdx >= 0 || hasWatermarkRule;
