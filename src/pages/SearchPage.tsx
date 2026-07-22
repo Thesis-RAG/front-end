@@ -120,11 +120,28 @@ export default function SearchPage() {
     [orgUnitInstances, allowedOuiIds],
   );
 
-  // Apply sensitivity filter on top of search results.
-  const filteredResults = results.filter((r) =>
-    sensitivityLevelFilter === "all" ||
-    Number(r.metadata.sensitivity) === sensitivityLevelFilter,
-  );
+  // Apply filters, then show only the best matching chunk per document.
+  // Search returns chunks/pages, but the result list is document-oriented for users.
+  const filteredResults = useMemo(() => {
+    const bestByDocument = new Map<string, SearchChunk>();
+
+    results
+      .filter((r) =>
+        sensitivityLevelFilter === "all" ||
+        Number(r.metadata.sensitivity) === sensitivityLevelFilter,
+      )
+      .forEach((result) => {
+        const documentKey = result.metadata.document_id || result.chunk_id;
+        const current = bestByDocument.get(documentKey);
+        if (!current || Number(result.score) > Number(current.score)) {
+          bestByDocument.set(documentKey, result);
+        }
+      });
+
+    return Array.from(bestByDocument.values()).sort(
+      (a, b) => Number(b.score) - Number(a.score),
+    );
+  }, [results, sensitivityLevelFilter]);
 
   // Count of active filters for the badge on the filter button.
   const activeFiltersCount = [
@@ -320,7 +337,7 @@ export default function SearchPage() {
                 ))}
               </div>
             ) : hasSearched ? (
-              results.length > 0 ? (
+              filteredResults.length > 0 ? (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">
                     Tìm thấy {filteredResults.length} kết quả cho "{query}"
