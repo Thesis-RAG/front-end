@@ -179,6 +179,21 @@ export async function updatePosition(
   return res.json();
 }
 
+// Delete a position that is not assigned to any user.
+export async function deletePosition(
+  id: string,
+  token: string | null,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/positions/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? "Failed to delete position");
+  }
+}
+
 // ── Assign / Unassign user ────────────────────────────────────────────────────
 
 // Assign a user to an OUI at a specific position.
