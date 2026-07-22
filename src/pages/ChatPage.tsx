@@ -114,6 +114,7 @@ export default function ChatPage() {
             relevance: s.relevance,
             docRestricted: s.docRestricted ?? false,
           })),
+          appliedRules: (item.appliedRules ?? assistant.appliedRules ?? []) as PolicyRule[],
           traceId: item.traceId,
           status: assistant.status ?? "success",
         });
