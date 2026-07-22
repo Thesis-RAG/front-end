@@ -369,7 +369,7 @@ export default function PolicyPage() {
             </div>
           </section>
         )}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-[720px] flex-none flex-col overflow-visible">
           {/* Tab nav bar — at top */}
           <div className="border-b border-border px-6 shrink-0">
             <TabsList className="mt-2">
@@ -412,11 +412,11 @@ export default function PolicyPage() {
           {/* ── Tab 1: Domains ───────────────────────────────────────────── */}
           <TabsContent
             value="domains"
-            className="flex min-h-0 flex-1 flex-col mt-0 overflow-hidden"
+            className="flex min-h-[720px] flex-none flex-col mt-0 overflow-visible"
             style={{ display: activeTab === "domains" ? "flex" : "none" }}
           >
             <div
-              className="flex h-full min-h-0 flex-1 pt-4 gap-5 px-6"
+              className="flex h-full min-h-[720px] flex-none pt-4 gap-5 px-6"
               style={{ display: activeTab === "domains" ? "flex" : "none" }}
             >
               <DomainList
@@ -443,11 +443,11 @@ export default function PolicyPage() {
           {/* ── Tab 2: Rules by domain ────────────────────────────────────── */}
           <TabsContent
             value="rules"
-            className="flex min-h-0 flex-1 flex-col mt-0 overflow-hidden"
+            className="flex min-h-[720px] flex-none flex-col mt-0 overflow-visible"
             style={{ display: activeTab === "rules" ? "flex" : "none" }}
           >
             <div
-              className="h-full min-h-0"
+              className="h-full min-h-[720px]"
               style={{ display: activeTab === "rules" ? "block" : "none" }}
             >
               <DomainRulesTab
@@ -469,11 +469,11 @@ export default function PolicyPage() {
           {/* ── Tab 3: Global rules ───────────────────────────────────────── */}
           <TabsContent
             value="global-rules"
-            className="flex min-h-0 flex-1 flex-col mt-0 overflow-hidden"
+            className="flex min-h-[720px] flex-none flex-col mt-0 overflow-visible"
             style={{ display: activeTab === "global-rules" ? "flex" : "none" }}
           >
             <div
-              className="h-full min-h-0"
+              className="h-full min-h-[720px]"
               style={{ display: activeTab === "global-rules" ? "block" : "none" }}
             >
               <GlobalRulesTab
