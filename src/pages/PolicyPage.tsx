@@ -350,13 +350,15 @@ export default function PolicyPage() {
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col scrollbar-thin">
         {ruleTemplates.length > 0 && (
           <section className="mx-6 mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-sm shrink-0">
-            <div className="flex items-start justify-between gap-4 p-4">
-              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold">Bộ rules dựng sẵn cho doanh nghiệp</p>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Chọn các rule cần áp dụng, sau đó cài đặt thành global rules. Mỗi rule có thể tiếp tục chỉnh sửa hoặc xóa như rule thủ công; rule lương và thông tin cá nhân được xử lý độc lập theo từng trường.</p>
+            <div className="flex items-start gap-4 p-4">
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Bộ rules dựng sẵn cho doanh nghiệp</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Chọn các rule cần áp dụng, sau đó cài đặt thành global rules. Mỗi rule có thể tiếp tục chỉnh sửa hoặc xóa như rule thủ công; rule lương và thông tin cá nhân được xử lý độc lập theo từng trường.</p>
+                </div>
               </div>
               <Button size="sm" className="shrink-0 gap-1.5" onClick={handleInstallSelectedRules} disabled={installingTemplates || selectedTemplateCodes.size === 0}>
                 {!installingTemplates && <Check className="h-3.5 w-3.5" />}
