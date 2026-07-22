@@ -369,7 +369,7 @@ export default function PolicyPage() {
             </div>
           </section>
         )}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-[760px] flex-1 flex-col overflow-visible">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {/* Tab nav bar — at top */}
           <div className="border-b border-border px-6 shrink-0">
             <TabsList className="mt-2">
@@ -410,8 +410,15 @@ export default function PolicyPage() {
           )}
 
           {/* ── Tab 1: Domains ───────────────────────────────────────────── */}
-          <TabsContent value="domains" className="flex min-h-[680px] flex-1 flex-col mt-0 overflow-hidden">
-            <div className="flex h-full min-h-[680px] flex-1 pt-4 gap-5 px-6">
+          <TabsContent
+            value="domains"
+            className="flex min-h-0 flex-1 flex-col mt-0 overflow-hidden"
+            style={{ display: activeTab === "domains" ? "flex" : "none" }}
+          >
+            <div
+              className="flex h-full min-h-0 flex-1 pt-4 gap-5 px-6"
+              style={{ display: activeTab === "domains" ? "flex" : "none" }}
+            >
               <DomainList
                 domains={domains}
                 loading={domainsLoading}
@@ -434,33 +441,51 @@ export default function PolicyPage() {
           </TabsContent>
 
           {/* ── Tab 2: Rules by domain ────────────────────────────────────── */}
-          <TabsContent value="rules" className="flex min-h-[680px] flex-1 flex-col mt-0 overflow-hidden">
-            <DomainRulesTab
-              domains={domains}
-              rulesDomainId={rulesDomainId}
-              setRulesDomainId={setRulesDomainId}
-              domainRules={domainRules}
-              rulesLoading={rulesLoading}
-              selectedDomain={selectedDomain}
-              onCreateRule={handleCreateDomainRule}
-              onUpdateRule={handleUpdateDomainRule}
-              onDeleteRule={handleDeleteDomainRule}
-              onToggleRule={handleToggleDomainRule}
-              lockedRoles={lockedRoles}
-            />
+          <TabsContent
+            value="rules"
+            className="flex min-h-0 flex-1 flex-col mt-0 overflow-hidden"
+            style={{ display: activeTab === "rules" ? "flex" : "none" }}
+          >
+            <div
+              className="h-full min-h-0"
+              style={{ display: activeTab === "rules" ? "block" : "none" }}
+            >
+              <DomainRulesTab
+                domains={domains}
+                rulesDomainId={rulesDomainId}
+                setRulesDomainId={setRulesDomainId}
+                domainRules={domainRules}
+                rulesLoading={rulesLoading}
+                selectedDomain={selectedDomain}
+                onCreateRule={handleCreateDomainRule}
+                onUpdateRule={handleUpdateDomainRule}
+                onDeleteRule={handleDeleteDomainRule}
+                onToggleRule={handleToggleDomainRule}
+                lockedRoles={lockedRoles}
+              />
+            </div>
           </TabsContent>
 
           {/* ── Tab 3: Global rules ───────────────────────────────────────── */}
-          <TabsContent value="global-rules" className="flex min-h-0 flex-1 flex-col mt-0 overflow-hidden">
-            <GlobalRulesTab
-              globalRules={globalRules}
-              loading={globalRulesLoading}
-              onCreateRule={handleCreateGlobalRule}
-              onUpdateRule={handleUpdateGlobalRule}
-              onDeleteRule={handleDeleteGlobalRule}
-              onToggleRule={handleToggleGlobalRule}
-              lockedRoles={lockedRoles}
-            />
+          <TabsContent
+            value="global-rules"
+            className="flex min-h-0 flex-1 flex-col mt-0 overflow-hidden"
+            style={{ display: activeTab === "global-rules" ? "flex" : "none" }}
+          >
+            <div
+              className="h-full min-h-0"
+              style={{ display: activeTab === "global-rules" ? "block" : "none" }}
+            >
+              <GlobalRulesTab
+                globalRules={globalRules}
+                loading={globalRulesLoading}
+                onCreateRule={handleCreateGlobalRule}
+                onUpdateRule={handleUpdateGlobalRule}
+                onDeleteRule={handleDeleteGlobalRule}
+                onToggleRule={handleToggleGlobalRule}
+                lockedRoles={lockedRoles}
+              />
+            </div>
           </TabsContent>
         </Tabs>
       </div>
