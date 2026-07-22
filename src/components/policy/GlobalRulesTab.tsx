@@ -22,7 +22,7 @@ export function GlobalRulesTab({
   lockedRoles,
 }: GlobalRulesTabProps) {
   return (
-    <div className="h-full min-h-0 min-w-0 mt-0 p-6 space-y-4 overflow-y-auto">
+    <div className="flex h-full min-h-0 min-w-0 flex-col mt-0 p-6 space-y-4 overflow-y-auto scrollbar-thin">
       <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-[12px] text-blue-700">
         Luật toàn cục áp dụng cho <strong>tất cả</strong> miền và chunks, bất
         kể phân loại miền.
