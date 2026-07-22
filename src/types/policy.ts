@@ -28,7 +28,7 @@ export interface RuleContract {
 
 export interface DomainRule {
   id: string;
-  domain_id: string | null;
+  domain_id: string;
   rule_code: string;
   name: string;
   action: string;   // Derived from violation_action, for backend internal use only.

@@ -1,4 +1,4 @@
-/** Rules table shared between the domain-rules tab and the global-rules tab. */
+/** Rules table for rules scoped to the selected domain. */
 import { Fragment, useState } from "react";
 import { Plus, Trash2, Pencil, ShieldCheck, Loader2, ChevronRight, ChevronDown, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";

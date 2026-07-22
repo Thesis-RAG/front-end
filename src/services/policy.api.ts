@@ -1,4 +1,4 @@
-/** Policy API — domains, entity types, domain rules, and global rules for the Policy-Contract Agent. */
+/** Policy API — domains, entity types, and domain rules for the Policy-Contract Agent. */
 import { ENV } from "@/config/env";
 import type {
   CreateDomainPayload,
@@ -25,12 +25,12 @@ export async function fetchRuleTemplates(token: string): Promise<RuleTemplate[]>
 export async function installRuleTemplates(
   token: string,
   templateCodes: string[] = [],
-  domainId?: string | null,
+  domainId: string,
 ): Promise<{ created: DomainRule[]; skipped: string[] }> {
   const res = await fetch(`${BASE}/rule-templates/install`, {
     method: "POST",
     headers: headers(token),
-    body: JSON.stringify({ template_codes: templateCodes, domain_id: domainId ?? null }),
+    body: JSON.stringify({ template_codes: templateCodes, domain_id: domainId }),
   });
   return handle(res);
 }
@@ -216,29 +216,6 @@ export async function createDomainRule(
   return handle(res);
 }
 
-// ── Global Rules ──────────────────────────────────────────────────────────────
-
-// Fetch all global rules that apply across every domain.
-export async function fetchGlobalRules(token: string): Promise<DomainRule[]> {
-  const res = await fetch(`${BASE}/global-rules`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return handle(res);
-}
-
-// Create a new global rule (not scoped to any single domain).
-export async function createGlobalRule(
-  token: string,
-  payload: CreateRulePayload,
-): Promise<DomainRule> {
-  const res = await fetch(`${BASE}/global-rules`, {
-    method: "POST",
-    headers: headers(token),
-    body: JSON.stringify(payload),
-  });
-  return handle(res);
-}
-
 // ── Rule CRUD (by rule id) ────────────────────────────────────────────────────
 
 // Update a rule by ID; supports partial fields including is_active toggle.
@@ -255,7 +232,7 @@ export async function updateRule(
   return handle(res);
 }
 
-// Delete a rule by ID (works for both domain rules and global rules).
+// Delete a rule by ID.
 export async function deleteRule(
   token: string,
   ruleId: string,

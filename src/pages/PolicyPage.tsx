@@ -1,9 +1,9 @@
 /**
- * PolicyPage: manage policy domains, entity types, domain rules, and global rules.
+ * PolicyPage: manage policy domains, entity types, and domain rules.
  * Split into components under src/components/policy/ to keep this file concise.
  */
 import { useState, useEffect, useCallback } from "react";
-import { Check, ShieldCheck, ListChecks, Globe, FolderOpen, Package, BookLock, Sparkles } from "lucide-react";
+import { Check, ShieldCheck, ListChecks, FolderOpen, Package, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -27,8 +27,6 @@ import {
   deleteEntityType,
   fetchDomainRules,
   createDomainRule,
-  fetchGlobalRules,
-  createGlobalRule,
   updateRule,
   deleteRule,
   fetchRuleTemplates,
@@ -38,7 +36,6 @@ import { fetchOrgUnits, fetchPositions } from "@/services/org_units.api";
 import { DomainList } from "@/components/policy/DomainList";
 import { DomainDetail } from "@/components/policy/DomainDetail";
 import { DomainRulesTab } from "@/components/policy/DomainRulesTab";
-import { GlobalRulesTab } from "@/components/policy/GlobalRulesTab";
 import { CreateDomainDialog } from "@/components/policy/CreateDomainDialog";
 import { AddEntityDialog } from "@/components/policy/AddEntityDialog";
 
@@ -78,9 +75,7 @@ export default function PolicyPage() {
 
   // ── Rules ─────────────────────────────────────────────────────────────────
   const [domainRules, setDomainRules] = useState<DomainRule[]>([]);
-  const [globalRules, setGlobalRules] = useState<DomainRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(false);
-  const [globalRulesLoading, setGlobalRulesLoading] = useState(false);
   const [rulesDomainId, setRulesDomainId] = useState<string>("");
   const [ruleTemplates, setRuleTemplates] = useState<RuleTemplate[]>([]);
   const [selectedTemplateCodes, setSelectedTemplateCodes] = useState<Set<string>>(new Set());
@@ -104,10 +99,12 @@ export default function PolicyPage() {
     }
     setInstallingTemplates(true);
     try {
-      const result = await installRuleTemplates(token, Array.from(selectedTemplateCodes));
+      if (!rulesDomainId) {
+        toast({ title: "Chưa chọn miền", description: "Hãy chọn miền trước khi cài bộ rule.", variant: "destructive" });
+        return;
+      }
+      const result = await installRuleTemplates(token, Array.from(selectedTemplateCodes), rulesDomainId);
       toast({ title: "Đã cài bộ rule mặc định", description: `${result.created.length} rule mới; ${result.skipped.length} rule đã tồn tại.` });
-      const globals = await fetchGlobalRules(token);
-      setGlobalRules(globals);
     } catch (err) {
       toast({ title: "Không thể cài bộ rule", description: String(err), variant: "destructive" });
     } finally {
@@ -171,16 +168,6 @@ export default function PolicyPage() {
       )
       .finally(() => setDomainDetailLoading(false));
   }, [token, selectedDomainId]);
-
-  // ── Load global rules on mount ────────────────────────────────────────────
-  useEffect(() => {
-    if (!token) return;
-    setGlobalRulesLoading(true);
-    fetchGlobalRules(token)
-      .then(setGlobalRules)
-      .catch(() => {})
-      .finally(() => setGlobalRulesLoading(false));
-  }, [token]);
 
   // ── Load domain rules when the Tab 2 selection changes ───────────────────
   useEffect(() => {
@@ -309,35 +296,8 @@ export default function PolicyPage() {
     toast({ title: active ? "Rule đã bật" : "Rule đã tắt", description: rule.name });
   }
 
-  // ── Global rules handlers ─────────────────────────────────────────────────
-  async function handleCreateGlobalRule(payload: CreateRulePayload) {
-    if (!token) return;
-    const rule = await createGlobalRule(token, payload);
-    setGlobalRules((prev) => [...prev, rule]);
-    toast({ title: "Đã tạo global rule", description: rule.name });
-  }
-  async function handleUpdateGlobalRule(ruleId: string, payload: CreateRulePayload) {
-    if (!token) return;
-    const rule = await updateRule(token, ruleId, payload);
-    setGlobalRules((prev) => prev.map((r) => (r.id === ruleId ? rule : r)));
-    toast({ title: "Đã cập nhật", description: rule.name });
-  }
-  async function handleDeleteGlobalRule(ruleId: string) {
-    if (!token) return;
-    await deleteRule(token, ruleId);
-    setGlobalRules((prev) => prev.filter((r) => r.id !== ruleId));
-    toast({ title: "Đã xóa global rule" });
-  }
-  async function handleToggleGlobalRule(ruleId: string, active: boolean) {
-    if (!token) return;
-    const rule = await updateRule(token, ruleId, { is_active: active });
-    setGlobalRules((prev) => prev.map((r) => (r.id === ruleId ? rule : r)));
-    toast({ title: active ? "Rule đã bật" : "Rule đã tắt", description: rule.name });
-  }
-
   const totalEntities = domains.reduce((s, d) => s + d.entity_type_count, 0);
   const totalDomainRules = domains.reduce((s, d) => s + d.rule_count, 0);
-  const totalGlobalRules = globalRules.length;
 
 
   return (
@@ -357,12 +317,18 @@ export default function PolicyPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold">Bộ rules dựng sẵn cho doanh nghiệp</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Chọn các rule cần áp dụng, sau đó cài đặt thành global rules. Mỗi rule có thể tiếp tục chỉnh sửa hoặc xóa như rule thủ công; rule lương và thông tin cá nhân được xử lý độc lập theo từng trường.</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Chọn các rule cần áp dụng cho miền đang chọn. Mỗi rule có thể tiếp tục chỉnh sửa hoặc xóa như rule thủ công; rule lương và thông tin cá nhân được xử lý độc lập theo từng trường.</p>
                 </div>
               </div>
-              <Button size="sm" className="shrink-0 gap-1.5" onClick={handleInstallSelectedRules} disabled={installingTemplates || selectedTemplateCodes.size === 0}>
+              <Button
+                size="sm"
+                className="shrink-0 gap-1.5"
+                onClick={handleInstallSelectedRules}
+                disabled={installingTemplates || selectedTemplateCodes.size === 0 || !rulesDomainId}
+                title={!rulesDomainId ? "Chọn miền trong tab Luật theo miền trước" : undefined}
+              >
                 {!installingTemplates && <Check className="h-3.5 w-3.5" />}
-                {installingTemplates ? "Đang cài..." : `Cài ${selectedTemplateCodes.size} rule`}
+                {installingTemplates ? "Đang cài..." : `Áp dụng ${selectedTemplateCodes.size} rule`}
               </Button>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-4 pt-3 text-[11px]">
@@ -403,20 +369,16 @@ export default function PolicyPage() {
               <TabsTrigger value="rules" className="gap-2 text-[12.5px]">
                 <ListChecks className="h-4 w-4" /> Luật theo miền
               </TabsTrigger>
-              <TabsTrigger value="global-rules" className="gap-2 text-[12.5px]">
-                <Globe className="h-4 w-4" /> Luật toàn cục
-              </TabsTrigger>
             </TabsList>
           </div>
 
-          {/* ── Stat cards — domain / global-rules tabs only ── */}
+          {/* ── Stat cards — domains tab only ── */}
           {activeTab !== "rules" && (
-            <div className="grid grid-cols-4 gap-4 px-6 pt-4 pb-2 shrink-0">
+            <div className="grid grid-cols-1 gap-4 px-6 pt-4 pb-2 shrink-0 sm:grid-cols-3">
               {[
                 { label: "Tổng miền dữ liệu",   value: domains.length,   icon: FolderOpen, bg: "bg-blue-50 dark:bg-blue-950/40",   iconCls: "text-blue-600"   },
                 { label: "Tổng thực thể",         value: totalEntities,    icon: Package,    bg: "bg-green-50 dark:bg-green-950/40",  iconCls: "text-green-600"  },
                 { label: "Tổng luật theo miền",   value: totalDomainRules, icon: ListChecks, bg: "bg-purple-50 dark:bg-purple-950/40",iconCls: "text-purple-600" },
-                { label: "Tổng luật toàn cục",    value: totalGlobalRules, icon: BookLock,   bg: "bg-orange-50 dark:bg-orange-950/40",iconCls: "text-orange-500" },
               ].map(({ label, value, icon: Icon, bg, iconCls }) => (
                 <div key={label} className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
                   <div className={`h-11 w-11 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
@@ -490,27 +452,6 @@ export default function PolicyPage() {
             </div>
           </TabsContent>
 
-          {/* ── Tab 3: Global rules ───────────────────────────────────────── */}
-          <TabsContent
-            value="global-rules"
-            className="flex min-h-[720px] flex-none flex-col mt-0 overflow-visible"
-            style={{ display: activeTab === "global-rules" ? "flex" : "none" }}
-          >
-            <div
-              className="h-full min-h-[720px]"
-              style={{ display: activeTab === "global-rules" ? "block" : "none" }}
-            >
-              <GlobalRulesTab
-                globalRules={globalRules}
-                loading={globalRulesLoading}
-                onCreateRule={handleCreateGlobalRule}
-                onUpdateRule={handleUpdateGlobalRule}
-                onDeleteRule={handleDeleteGlobalRule}
-                onToggleRule={handleToggleGlobalRule}
-                lockedRoles={lockedRoles}
-              />
-            </div>
-          </TabsContent>
         </Tabs>
       </div>
 
