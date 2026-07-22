@@ -325,7 +325,7 @@ export function RuleFormFields({
               className="placeholder:text-[11px] text-[12px]"
             />
             <p className="text-[10px] text-muted-foreground/70">
-              Vị trí này dù bị dính quy tắc vẫn xem được đầy đủ, không bị hạn
+              Vị trí này dù bị bởi quy tắc vẫn xem được đầy đủ, không bị hạn
               chế. Các vị trí có khóa 🔒 luôn được bao gồm và không thể xóa.
             </p>
           </div>

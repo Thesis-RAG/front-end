@@ -3,7 +3,7 @@
  * Split into components under src/components/policy/ to keep this file concise.
  */
 import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, ListChecks, Globe, FolderOpen, Package, BookLock } from "lucide-react";
+import { Check, ShieldCheck, ListChecks, Globe, FolderOpen, Package, BookLock, Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -123,6 +123,17 @@ export default function PolicyPage() {
       else next.add(code);
       return next;
     });
+  }
+
+  function getTemplateScopeLabels(template: RuleTemplate) {
+    const conditions = template.rule.conditions;
+    const scopes = [
+      ...conditions.target_entity_types,
+      ...conditions.target_flags,
+    ].filter(Boolean);
+
+    if (scopes.length === 0) return ["Toàn bộ đoạn nội dung"];
+    return scopes.map((scope) => scope.replace(/_/g, " "));
   }
 
   const loadDomains = useCallback(async () => {
@@ -338,30 +349,41 @@ export default function PolicyPage() {
 
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col scrollbar-thin">
         {ruleTemplates.length > 0 && (
-          <section className="mx-6 mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4 shrink-0">
-            <div className="flex items-start justify-between gap-4">
+          <section className="mx-6 mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-sm shrink-0">
+            <div className="flex items-start justify-between gap-4 p-4">
+              <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Sparkles className="h-4 w-4" />
+              </div>
               <div>
                 <p className="text-sm font-semibold">Bộ rules dựng sẵn cho doanh nghiệp</p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">Chọn các rule cần áp dụng, sau đó cài đặt thành global rules. Mỗi rule có thể tiếp tục chỉnh sửa hoặc xóa như rule thủ công; rule lương và thông tin cá nhân được xử lý độc lập theo từng trường.</p>
               </div>
-              <Button size="sm" onClick={handleInstallSelectedRules} disabled={installingTemplates || selectedTemplateCodes.size === 0}>
+              <Button size="sm" className="shrink-0 gap-1.5" onClick={handleInstallSelectedRules} disabled={installingTemplates || selectedTemplateCodes.size === 0}>
+                {!installingTemplates && <Check className="h-3.5 w-3.5" />}
                 {installingTemplates ? "Đang cài..." : `Cài ${selectedTemplateCodes.size} rule`}
               </Button>
             </div>
-            <div className="mt-3 flex items-center gap-2 text-[11px]">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border/70 px-4 pt-3 text-[11px]">
               <span className="text-muted-foreground">Đã chọn {selectedTemplateCodes.size}/{ruleTemplates.length} rule</span>
               <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setSelectedTemplateCodes(new Set(ruleTemplates.filter((item) => item.recommended).map((item) => item.template_code)))}>Chọn bộ khuyến nghị</Button>
               <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setSelectedTemplateCodes(new Set())}>Bỏ chọn tất cả</Button>
             </div>
-            <div className="mt-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[30rem] overflow-y-auto pr-1 scrollbar-thin">
+            <div className="grid max-h-[30rem] grid-cols-1 gap-3 overflow-y-auto px-4 pb-4 pt-3 pr-3 scrollbar-thin md:grid-cols-2 lg:grid-cols-3">
               {ruleTemplates.map((template) => (
-                <label key={`select-${template.template_code}`} className={`cursor-pointer rounded-lg border px-3 py-2.5 transition-colors ${selectedTemplateCodes.has(template.template_code) ? "border-primary bg-primary/10" : "bg-background hover:border-primary/40"}`}>
+                <label key={`select-${template.template_code}`} className={`group cursor-pointer rounded-xl border p-3 transition-all ${selectedTemplateCodes.has(template.template_code) ? "border-primary bg-primary/5 shadow-sm" : "border-border/80 bg-background hover:border-primary/40 hover:shadow-sm"}`}>
                   <div className="flex items-start gap-2">
-                    <input type="checkbox" className="mt-0.5" checked={selectedTemplateCodes.has(template.template_code)} onChange={() => toggleTemplate(template.template_code)} />
+                    <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" checked={selectedTemplateCodes.has(template.template_code)} onChange={() => toggleTemplate(template.template_code)} />
                     <div className="min-w-0">
-                      <p className="text-[11px] font-medium leading-snug">{template.name}</p>
+                      <p className="text-xs font-semibold leading-snug">{template.name}</p>
                       <p className="text-[10px] text-muted-foreground mt-0.5">{template.department} · {template.category}</p>
-                      <p className="text-[10px] text-muted-foreground/90 mt-1 leading-relaxed">{template.description}</p>
+                      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground/90">{template.description}</p>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {getTemplateScopeLabels(template).map((scope) => (
+                          <span key={`${template.template_code}-${scope}`} className="rounded-md bg-muted px-1.5 py-0.5 text-[9px] text-muted-foreground">
+                            {scope}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </label>
