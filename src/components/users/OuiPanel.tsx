@@ -210,7 +210,7 @@ export function OuiPanel({
       <div className="flex-1 overflow-y-auto">
         {visibleOuis.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-muted-foreground gap-1">
-            <p className="text-xs">Chưa có phòng ban nào</p>
+            <p className="text-xs">Chưa thêm thông tin</p>
           </div>
         ) : (
           <div className="divide-y">

@@ -5,6 +5,7 @@ import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { SourcesPanel } from "@/components/chat/SourcesPanel";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import {
   Conversation,
   ChatMessage as ChatMessageType,
@@ -113,6 +114,9 @@ export default function ChatPage() {
             surroundingContext: s.surroundingContext ?? "",
             relevance: s.relevance,
             docRestricted: s.docRestricted ?? false,
+            entityAccessRequired: s.entityAccessRequired ?? false,
+            entityAccessGranted: s.entityAccessGranted ?? false,
+            blockedEntityTypes: s.blockedEntityTypes ?? [],
           })),
           appliedRules: (item.appliedRules ?? assistant.appliedRules ?? []) as PolicyRule[],
           traceId: item.traceId,
@@ -366,7 +370,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full min-w-0 overflow-hidden">
       <ChatSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -377,22 +381,17 @@ export default function ChatPage() {
       />
       <div className="flex flex-1 flex-col min-w-0">
         {/* Header bar */}
-        <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border/60 bg-background/95 backdrop-blur-sm shrink-0">
+        <div className="flex shrink-0 items-center gap-3 border-b border-border/60 bg-background/95 px-5 py-2.5 backdrop-blur-sm">
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-semibold text-foreground truncate">
               {conversations.find((c) => c.id === activeConversationId)?.title ??
                 (chatMode === "rag" ? "Trợ lý RAG SMEs" : "Trợ lý AI")}
             </h1>
           </div>
-          <div className={cn(
-            "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium shrink-0",
-            chatMode === "rag"
-              ? "bg-blue-500/10 text-blue-600"
-              : "bg-teal-500/10 text-teal-600",
-          )}>
-            {chatMode === "rag" ? <BookOpen className="h-3 w-3" /> : <Bot className="h-3 w-3" />}
+          <Badge variant={chatMode === "rag" ? "info" : "success"}>
+            {chatMode === "rag" ? <BookOpen data-icon="inline-start" /> : <Bot data-icon="inline-start" />}
             {chatMode === "rag" ? "RAG SMEs" : "Chatbot"}
-          </div>
+          </Badge>
         </div>
 
         {messages.length === 0 ? (

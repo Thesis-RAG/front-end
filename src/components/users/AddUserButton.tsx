@@ -44,8 +44,8 @@ export function AddUserButton({ onCreated }: { onCreated?: () => void }) {
 
   return (
     <>
-      <Button className="gap-2 bg-gray-900" onClick={() => setOpen(true)}>
-        <Plus className="h-4 w-4" /> Thêm người dùng
+      <Button variant="default" className="gap-2" onClick={() => setOpen(true)}>
+        <Plus data-icon="inline-start" /> Thêm người dùng
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[420px]">

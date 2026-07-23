@@ -15,14 +15,20 @@ import {
   submitForReview,
   fetchMyAccessRequests,
   createAccessRequest,
+  createEntityAccessRequest,
+  previewDocumentEntities,
   getDocumentAccessStatus,
   AccessRequestRead,
+  EntityActionConfig,
+  EntityPreview,
 } from "@/services/documents.api";
 import {
   fetchOrgUnits,
   fetchOrgUnitInstances,
+  fetchPositions,
   OrgUnit,
   OrgUnitInstance,
+  Position,
 } from "@/services/org_units.api";
 import { ENV } from "@/config/env";
 import { extFromFileName } from "@/lib/file-type-icon";
@@ -33,6 +39,7 @@ import { DocumentTableBaseProps } from "@/components/documents/DocumentTable";
 import { UploadDialog } from "@/components/documents/UploadDialog";
 import { UploadVersionDialog } from "@/components/documents/UploadVersionDialog";
 import { EditDocumentDialog } from "@/components/documents/EditDocumentDialog";
+import type { EntityScopeOption } from "@/components/documents/EntityScopePicker";
 
 async function fetchDocuments(token: string): Promise<DocumentRead[]> {
   const res = await fetch(`${ENV.API_BASE_URL}/documents`, {
@@ -49,6 +56,7 @@ export default function DocumentsPage() {
   const [documents, setDocuments] = useState<DocumentRead[]>([]);
   const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
   const [orgUnitInstances, setOrgUnitInstances] = useState<OrgUnitInstance[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [docsRefresh, setDocsRefresh] = useState(0);
   const [activeTab, setActiveTab] = useState("all");
@@ -64,6 +72,9 @@ export default function DocumentsPage() {
   const [uploadOuiIds, setUploadOuiIds] = useState<string[]>([]);
   const [uploadSensitivity, setUploadSensitivity] = useState<number>(2);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadEntityPreview, setUploadEntityPreview] = useState<EntityPreview | null>(null);
+  const [uploadEntityActions, setUploadEntityActions] = useState<EntityActionConfig[]>([]);
+  const [detectingUploadEntities, setDetectingUploadEntities] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -71,6 +82,9 @@ export default function DocumentsPage() {
   const [versionDialogOpen, setVersionDialogOpen] = useState(false);
   const [versionTarget, setVersionTarget] = useState<DocumentRead | null>(null);
   const [selectedVersionFile, setSelectedVersionFile] = useState<File | null>(null);
+  const [versionEntityPreview, setVersionEntityPreview] = useState<EntityPreview | null>(null);
+  const [versionEntityActions, setVersionEntityActions] = useState<EntityActionConfig[]>([]);
+  const [detectingVersionEntities, setDetectingVersionEntities] = useState(false);
   const [uploadingVersion, setUploadingVersion] = useState(false);
   const fileVersionInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -109,6 +123,29 @@ export default function DocumentsPage() {
     [orgUnitInstances, allowedOuiIds],
   );
 
+  const entityUnitOptions = useMemo<EntityScopeOption[]>(
+    () => allowedOrgUnitInstances.map((instance) => {
+      const unit = orgUnits.find((item) => item.id === instance.ou_id);
+      return {
+        id: instance.id,
+        label: instance.name,
+        description: unit?.name,
+      };
+    }),
+    [allowedOrgUnitInstances, orgUnits],
+  );
+
+  const entityRoleOptions = useMemo<EntityScopeOption[]>(
+    () => positions
+      .filter((position) => allowedOrgUnitInstances.some((instance) => instance.ou_id === position.ou_id))
+      .map((position) => ({
+        id: position.id,
+        label: position.name,
+        description: orgUnits.find((unit) => unit.id === position.ou_id)?.name,
+      })),
+    [positions, allowedOrgUnitInstances, orgUnits],
+  );
+
   const myDocuments = useMemo(
     () => documents.filter((d) => d.owner_user_id === user?.id),
     [documents, user?.id],
@@ -145,6 +182,48 @@ export default function DocumentsPage() {
     setUploadOuiIds([]);
     setUploadSensitivity(2);
     setSelectedFile(null);
+    setUploadEntityPreview(null);
+    setUploadEntityActions([]);
+  };
+
+  const detectUploadFile = async (file: File | null, version = false) => {
+    if (version) {
+      setSelectedVersionFile(file);
+      setVersionEntityPreview(null);
+      setVersionEntityActions([]);
+      if (!file) return;
+      setDetectingVersionEntities(true);
+    } else {
+      setSelectedFile(file);
+      setUploadEntityPreview(null);
+      setUploadEntityActions([]);
+      if (!file) return;
+      setDetectingUploadEntities(true);
+    }
+    try {
+      const preview = await previewDocumentEntities(file, token);
+      const actions = preview.entity_types.map((entity_type) => ({
+        entity_type,
+        label: entity_type,
+        action: "full" as const,
+        source: "gliner" as const,
+        enabled: true,
+      }));
+      if (version) {
+        setVersionEntityPreview(preview);
+        setVersionEntityActions(actions);
+      } else {
+        setUploadEntityPreview(preview);
+        setUploadEntityActions(actions);
+      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Không thể detect thực thể", description: err?.message });
+      if (version) setSelectedVersionFile(null);
+      else setSelectedFile(null);
+    } finally {
+      if (version) setDetectingVersionEntities(false);
+      else setDetectingUploadEntities(false);
+    }
   };
 
   const handleUpload = async () => {
@@ -157,7 +236,7 @@ export default function DocumentsPage() {
         { title, oui_ids: uploadOuiIds, sensitivity: uploadSensitivity, data_type: "file", document_type },
         token,
       );
-      await uploadDocumentVersion(doc.id, selectedFile, token);
+      await uploadDocumentVersion(doc.id, selectedFile, token, uploadEntityActions);
       if (!isCorpMember) await submitForReview(doc.id, token);
       toast({ variant: "success", title: "Tải lên thành công" });
       setUploadDialogOpen(false);
@@ -178,7 +257,26 @@ export default function DocumentsPage() {
     }
     try {
       await openDocumentFile(doc.id, doc.current_version_id, token);
-    } catch {
+    } catch (error: any) {
+      if (error?.code === "entity_access_required" && Array.isArray(error.entity_types)) {
+        const shouldRequest = window.confirm(
+          "File chứa thực thể bị chặn (" + error.entity_types.join(", ") + "). Gửi yêu cầu quyền xem?",
+        );
+        if (shouldRequest) {
+          try {
+            await createEntityAccessRequest({
+              document_id: error.document_id ?? doc.id,
+              document_version_id: error.document_version_id ?? doc.current_version_id,
+              entity_types: error.entity_types,
+            }, token);
+            toast({ variant: "success", title: "Đã gửi yêu cầu quyền thực thể" });
+            return;
+          } catch (requestError: any) {
+            toast({ variant: "destructive", title: "Không thể gửi yêu cầu", description: requestError?.message });
+            return;
+          }
+        }
+      }
       toast({ variant: "destructive", title: "Không thể mở tài liệu" });
     }
   };
@@ -198,11 +296,13 @@ export default function DocumentsPage() {
     if (!versionTarget || !selectedVersionFile) return;
     setUploadingVersion(true);
     try {
-      await uploadDocumentVersion(versionTarget.id, selectedVersionFile, token);
+      await uploadDocumentVersion(versionTarget.id, selectedVersionFile, token, versionEntityActions);
       toast({ variant: "success", title: "Đã tải lên phiên bản mới" });
       setVersionDialogOpen(false);
       setVersionTarget(null);
       setSelectedVersionFile(null);
+      setVersionEntityPreview(null);
+      setVersionEntityActions([]);
       setDocsRefresh((n) => n + 1);
     } catch (err: any) {
       toast({ variant: "destructive", title: "Thất bại", description: err?.message });
@@ -257,8 +357,17 @@ export default function DocumentsPage() {
 
   // Load org units and instances once on mount.
   useEffect(() => {
-    fetchOrgUnits(token).then(setOrgUnits).catch(() => {});
-    fetchOrgUnitInstances(token).then(setOrgUnitInstances).catch(() => {});
+    Promise.all([
+      fetchOrgUnits(token),
+      fetchOrgUnitInstances(token),
+      fetchPositions(token),
+    ])
+      .then(([units, instances, availablePositions]) => {
+        setOrgUnits(units);
+        setOrgUnitInstances(instances);
+        setPositions(availablePositions);
+      })
+      .catch(() => {});
   }, []);
 
   // Sync access request map with the latest requests after any data refresh.
@@ -298,6 +407,8 @@ export default function DocumentsPage() {
     onUploadVersion: (doc) => {
       setVersionTarget(doc);
       setSelectedVersionFile(null);
+      setVersionEntityPreview(null);
+      setVersionEntityActions([]);
       setVersionDialogOpen(true);
     },
     onRequestAccess: handleRequestAccess,
@@ -306,14 +417,14 @@ export default function DocumentsPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="enterprise-page flex h-full min-h-0 flex-col">
       <PageHeader
         title="Tài liệu"
         description="Quản lý tài liệu của công ty, bao gồm tải lên, phân loại và theo dõi phiên bản."
         actions={
           canEdit && (
             <Button
-              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 focus:ring-primary"
+              className="gap-2"
               onClick={() => {
                 resetUploadForm();
                 setUploadDialogOpen(true);
@@ -325,13 +436,13 @@ export default function DocumentsPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto flex flex-col">
+      <div className="page-scroll flex flex-1 flex-col">
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
           className="flex-1 flex flex-col"
         >
-          <div className="border-b border-border px-6">
+          <div className="border-b border-border px-4 sm:px-6">
             <TabsList className="mt-2">
               <TabsTrigger value="all" className="gap-2 text-[12.5px]">
                 <BookOpen className="h-4 w-4" /> Tất cả
@@ -376,13 +487,13 @@ export default function DocumentsPage() {
         ref={fileInputRef}
         type="file"
         className="hidden"
-        onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => detectUploadFile(e.target.files?.[0] ?? null)}
       />
       <input
         ref={fileVersionInputRef}
         type="file"
         className="hidden"
-        onChange={(e) => setSelectedVersionFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => detectUploadFile(e.target.files?.[0] ?? null, true)}
       />
 
       <UploadDialog
@@ -403,6 +514,12 @@ export default function DocumentsPage() {
         uploading={uploading}
         onUpload={handleUpload}
         fileInputRef={fileInputRef}
+        entityPreview={uploadEntityPreview}
+        entityActions={uploadEntityActions}
+        setEntityActions={setUploadEntityActions}
+        detectingEntities={detectingUploadEntities}
+        entityUnitOptions={entityUnitOptions}
+        entityRoleOptions={entityRoleOptions}
       />
 
       <UploadVersionDialog
@@ -412,6 +529,8 @@ export default function DocumentsPage() {
           if (!o) {
             setVersionTarget(null);
             setSelectedVersionFile(null);
+            setVersionEntityPreview(null);
+            setVersionEntityActions([]);
           }
         }}
         versionTarget={versionTarget}
@@ -420,6 +539,12 @@ export default function DocumentsPage() {
         uploadingVersion={uploadingVersion}
         onUploadVersion={handleUploadVersion}
         fileVersionInputRef={fileVersionInputRef}
+        entityPreview={versionEntityPreview}
+        entityActions={versionEntityActions}
+        setEntityActions={setVersionEntityActions}
+        detectingEntities={detectingVersionEntities}
+        entityUnitOptions={entityUnitOptions}
+        entityRoleOptions={entityRoleOptions}
       />
 
       <EditDocumentDialog

@@ -30,10 +30,14 @@ import {
   updateDocument,
   openDocumentFile,
   fetchAllAccessRequests,
+  fetchAllEntityAccessRequests,
   approveAccessRequest,
+  approveEntityAccessRequest,
   rejectAccessRequest,
+  rejectEntityAccessRequest,
   revokeAccessRequest,
   AccessRequestRead,
+  EntityAccessRequestRead,
 } from "@/services/documents.api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +51,7 @@ import {
 import { SENSITIVITY_LEVEL } from "@/types";
 import { DocRecord, ApprovalCard } from "@/components/approvals/ApprovalCard";
 import { AccessRequestCard } from "@/components/approvals/AccessRequestCard";
+import { EntityAccessRequestCard } from "@/components/approvals/EntityAccessRequestCard";
 import { GrantedAccessCard } from "@/components/approvals/GrantedAccessCard";
 
 // Main page component: tab-based view for pending documents, access requests, and granted-access management.
@@ -68,8 +73,11 @@ export default function ApprovalsPage() {
 
   // Access request state
   const [accessRequests, setAccessRequests] = useState<AccessRequestRead[]>([]);
+  const [entityAccessRequests, setEntityAccessRequests] = useState<EntityAccessRequestRead[]>([]);
   const [loadingAR, setLoadingAR] = useState(false);
   const [selectedAR, setSelectedAR] = useState<AccessRequestRead | null>(null);
+  const [selectedEntityAR, setSelectedEntityAR] = useState<EntityAccessRequestRead | null>(null);
+  const [entityARAction, setEntityARAction] = useState<"approve" | "reject" | null>(null);
   const [arAction, setArAction] = useState<"approve" | "reject" | null>(null);
   const [arNote, setArNote] = useState("");
   const [arExpiry, setArExpiry] = useState("");
@@ -90,8 +98,11 @@ export default function ApprovalsPage() {
   // Fetch all access requests and refresh the access-request list.
   const loadAccessRequests = () => {
     setLoadingAR(true);
-    fetchAllAccessRequests(token)
-      .then(setAccessRequests)
+    Promise.all([fetchAllAccessRequests(token), fetchAllEntityAccessRequests(token)])
+      .then(([documentRequests, entityRequests]) => {
+        setAccessRequests(documentRequests);
+        setEntityAccessRequests(entityRequests);
+      })
       .catch(() => toast({ variant: "destructive", title: "Không thể tải yêu cầu truy cập" }))
       .finally(() => setLoadingAR(false));
   };
@@ -119,6 +130,7 @@ export default function ApprovalsPage() {
     (r) => r.status === "approved" && (r.expires_at === null || new Date(r.expires_at) > new Date()),
   );
   const pendingAR = accessRequests.filter((r) => r.status === "pending");
+  const pendingEntityAR = entityAccessRequests.filter((r) => r.status === "pending");
 
   // Open the approve/reject confirmation dialog for a document.
   const handleAction = (doc: DocRecord, type: "approve" | "reject") => {
@@ -185,6 +197,29 @@ export default function ApprovalsPage() {
     }
   };
 
+  const confirmEntityARAction = async () => {
+    if (!selectedEntityAR || !entityARAction) return;
+    setSubmittingAR(true);
+    try {
+      if (entityARAction === "approve") {
+        await approveEntityAccessRequest(selectedEntityAR.id, token, {
+          admin_note: arNote || undefined,
+          expires_at: arExpiry ? new Date(arExpiry).toISOString() : undefined,
+        });
+      } else {
+        await rejectEntityAccessRequest(selectedEntityAR.id, token, arNote || undefined);
+      }
+      toast({ variant: "success", title: entityARAction === "approve" ? "Đã cấp quyền thực thể" : "Đã từ chối quyền thực thể" });
+      setSelectedEntityAR(null);
+      setEntityARAction(null);
+      loadAccessRequests();
+    } catch {
+      toast({ variant: "destructive", title: "Thao tác thất bại" });
+    } finally {
+      setSubmittingAR(false);
+    }
+  };
+
   // Submit the approve or reject action for the selected access request.
   const confirmARAction = async () => {
     if (!selectedAR || !arAction) return;
@@ -211,7 +246,7 @@ export default function ApprovalsPage() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="enterprise-page flex h-full min-h-0 flex-col">
       <PageHeader
         title="Phê duyệt"
         description="Xét duyệt tài liệu và phiên bản mới"
@@ -219,14 +254,14 @@ export default function ApprovalsPage() {
 
       <Tabs defaultValue="review" className="flex-1 flex flex-col overflow-hidden">
         {/* Tab bar — top */}
-        <div className="border-b border-border px-6 shrink-0">
+        <div className="shrink-0 border-b border-border px-4 sm:px-6">
           <TabsList className="mt-2">
             <TabsTrigger value="review" className="gap-2 text-[12.5px]">
               Đang chờ xét duyệt
               {pendingReview.length > 0 && (
                 <Badge
-                  variant="secondary"
-                  className="h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-blue-500 text-white"
+                  variant="info"
+                  className="flex size-5 items-center justify-center rounded-full p-0 text-xs"
                 >
                   {pendingReview.length}
                 </Badge>
@@ -237,7 +272,7 @@ export default function ApprovalsPage() {
               {pendingUploaded.length > 0 && (
                 <Badge
                   variant="secondary"
-                  className="h-5 w-5 rounded-full p-0 text-xs"
+                  className="flex size-5 items-center justify-center rounded-full p-0 text-xs"
                 >
                   {pendingUploaded.length}
                 </Badge>
@@ -245,12 +280,12 @@ export default function ApprovalsPage() {
             </TabsTrigger>
             <TabsTrigger value="access-requests" className="gap-2 text-[12.5px]">
               Yêu cầu truy cập
-              {pendingAR.length > 0 && (
+              {pendingAR.length + pendingEntityAR.length > 0 && (
                 <Badge
-                  variant="secondary"
-                  className="h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-amber-500 text-white"
+                  variant="warning"
+                  className="flex size-5 items-center justify-center rounded-full p-0 text-xs"
                 >
-                  {pendingAR.length}
+                  {pendingAR.length + pendingEntityAR.length}
                 </Badge>
               )}
             </TabsTrigger>
@@ -258,8 +293,8 @@ export default function ApprovalsPage() {
               Đã cấp quyền
               {approvedAR.length > 0 && (
                 <Badge
-                  variant="secondary"
-                  className="h-5 w-5 rounded-full p-0 text-xs flex items-center justify-center bg-green-500 text-white"
+                  variant="success"
+                  className="flex size-5 items-center justify-center rounded-full p-0 text-xs"
                 >
                   {approvedAR.length}
                 </Badge>
@@ -269,7 +304,7 @@ export default function ApprovalsPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 px-6 pt-4 pb-0 shrink-0">
+        <div className="grid shrink-0 grid-cols-1 gap-4 px-4 pt-4 pb-0 sm:grid-cols-2 sm:px-6 xl:grid-cols-4">
           {[
             {
               label: "Chờ xét duyệt",
@@ -287,7 +322,7 @@ export default function ApprovalsPage() {
             },
             {
               label: "Yêu cầu truy cập",
-              value: pendingAR.length,
+              value: pendingAR.length + pendingEntityAR.length,
               icon: Lock,
               bg: "bg-blue-50 dark:bg-blue-950/40",
               iconCls: "text-blue-600",
@@ -366,7 +401,7 @@ export default function ApprovalsPage() {
           <TabsContent value="access-requests" className="space-y-4">
             {loadingAR ? (
               <p className="text-sm text-muted-foreground">Loading...</p>
-            ) : accessRequests.length === 0 ? (
+            ) : accessRequests.length === 0 && entityAccessRequests.length === 0 ? (
               <EmptyState
                 icon={Lock}
                 title="Không có yêu cầu truy cập nào"
@@ -382,6 +417,14 @@ export default function ApprovalsPage() {
                 />
               ))
             )}
+            {entityAccessRequests.map((req) => (
+              <EntityAccessRequestCard
+                key={`entity-${req.id}`}
+                req={req}
+                onApprove={() => { setSelectedEntityAR(req); setEntityARAction("approve"); setArNote(""); setArExpiry(""); }}
+                onReject={() => { setSelectedEntityAR(req); setEntityARAction("reject"); setArNote(""); setArExpiry(""); }}
+              />
+            ))}
           </TabsContent>
 
           <TabsContent value="granted" className="space-y-4">
@@ -453,6 +496,36 @@ export default function ApprovalsPage() {
               disabled={submittingAR}
             >
               {submittingAR ? "Đang xử lý..." : arAction === "approve" ? "Phê duyệt" : "Từ chối"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedEntityAR} onOpenChange={() => setSelectedEntityAR(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{entityARAction === "approve" ? "Phê duyệt quyền thực thể" : "Từ chối quyền thực thể"}</DialogTitle>
+            <DialogDescription>
+              Tài liệu: <strong>{selectedEntityAR?.document_title ?? selectedEntityAR?.document_id}</strong>
+              {" · "}Thực thể: <strong>{selectedEntityAR?.entity_types.join(", ")}</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {entityARAction === "approve" && (
+              <div>
+                <Label className="text-[13px]">Thời hạn truy cập (tuỳ chọn)</Label>
+                <Input type="datetime-local" value={arExpiry} onChange={(e) => setArExpiry(e.target.value)} className="mt-2" />
+              </div>
+            )}
+            <div>
+              <Label className="text-[13px]">Ghi chú</Label>
+              <Textarea value={arNote} onChange={(e) => setArNote(e.target.value)} className="mt-2" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedEntityAR(null)}>Huỷ</Button>
+            <Button variant={entityARAction === "approve" ? "default" : "destructive"} onClick={confirmEntityARAction} disabled={submittingAR}>
+              {submittingAR ? "Đang xử lý..." : entityARAction === "approve" ? "Phê duyệt" : "Từ chối"}
             </Button>
           </DialogFooter>
         </DialogContent>

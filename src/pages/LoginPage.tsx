@@ -47,10 +47,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background to-muted/50 p-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
+          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-xl bg-primary shadow-sm">
             <Building2 className="h-6 w-6 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">KnowledgeHub</CardTitle>
@@ -58,8 +58,8 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div className="space-y-2">
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
               <Label htmlFor="email">Email or username</Label>
               <Input
                 id="email"
@@ -72,7 +72,7 @@ export default function LoginPage() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Input
@@ -98,8 +98,8 @@ export default function LoginPage() {
               <p className="text-sm text-destructive">{error}</p>
             )}
 
-            <Button type="submit" className="w-full gap-2" disabled={loading}>
-              <LogIn className="h-4 w-4" />
+            <Button type="submit" className="w-full" disabled={loading}>
+              <LogIn data-icon="inline-start" />
               {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>

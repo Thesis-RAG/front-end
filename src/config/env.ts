@@ -1,8 +1,9 @@
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
-// Keep local development convenient while giving production builds a safe API default.
-// Amplify should still provide VITE_API_BASE_URL explicitly in its environment settings.
-const defaultApiBaseUrl = import.meta.env.DEV
+// Local dev and local production-preview builds must never fall back to the
+// production API. Production hosting should provide VITE_API_BASE_URL explicitly.
+const isLocalMode = import.meta.env.DEV || import.meta.env.MODE === "development";
+const defaultApiBaseUrl = isLocalMode
   ? "http://localhost:8000"
   : "https://rolesawarerag.duckdns.org";
 

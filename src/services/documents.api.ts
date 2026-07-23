@@ -12,6 +12,54 @@ type CreateDocumentPayload = {
   tags?: string[];
 };
 
+export type EntityAction = "block" | "full" | "mask";
+
+export type EntityActionConfig = {
+  entity_type: string;
+  label?: string;
+  action: EntityAction;
+  source?: "gliner" | "regex" | "manual";
+  enabled?: boolean;
+  scope_oui_ids?: string[];
+  scope_position_ids?: string[];
+};
+
+export type EntityPreviewEntity = {
+  text: string;
+  label: string;
+  start: number;
+  end: number;
+  score: number;
+  source: string;
+  flags: string[];
+};
+
+export type EntityPreview = {
+  file_name: string;
+  text_preview: string;
+  text_truncated: boolean;
+  entities: EntityPreviewEntity[];
+  entity_types: string[];
+};
+
+export async function previewDocumentEntities(
+  file: File,
+  token: string,
+): Promise<EntityPreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${ENV.API_BASE_URL}/documents/entity-preview`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 // Create a new document record with metadata (no file — upload via uploadDocumentVersion).
 export async function createDocument(
   payload: CreateDocumentPayload,
@@ -76,9 +124,11 @@ export async function uploadDocumentVersion(
   documentId: string,
   file: File,
   token: string,
+  entityActions: EntityActionConfig[] = [],
 ) {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("entity_actions_json", JSON.stringify(entityActions));
   const res = await fetch(
     `${ENV.API_BASE_URL}/documents/${documentId}/versions`,
     {
@@ -227,6 +277,24 @@ export type AccessRequestRead = {
   resolved_at: string | null;
 };
 
+export type EntityAccessRequestRead = {
+  id: string;
+  request_kind: "entity";
+  document_id: string;
+  document_version_id: string;
+  document_title: string | null;
+  user_id: string;
+  requester_name: string | null;
+  requester_email: string | null;
+  entity_types: string[];
+  status: "pending" | "approved" | "rejected" | "revoked";
+  expires_at: string | null;
+  admin_id: string | null;
+  admin_note: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
 // Get the current user's access status for a document (restricted chunks + request state).
 export async function getDocumentAccessStatus(
   documentId: string,
@@ -258,6 +326,74 @@ export async function createAccessRequest(
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
   }
+  return res.json();
+}
+
+export async function createEntityAccessRequest(
+  payload: { document_id: string; document_version_id: string; entity_types: string[] },
+  token: string,
+): Promise<EntityAccessRequestRead> {
+  const res = await fetch(`${ENV.API_BASE_URL}/entity-access-requests`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchAllEntityAccessRequests(token: string): Promise<EntityAccessRequestRead[]> {
+  const res = await fetch(`${ENV.API_BASE_URL}/entity-access-requests`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    let detail: any = null;
+    try { detail = JSON.parse(body); } catch { /* keep the HTTP fallback */ }
+    const error = new Error((detail?.detail?.message ?? detail?.message ?? body) || `HTTP ${res.status}`) as Error & Record<string, any>;
+    Object.assign(error, detail?.detail ?? detail ?? {});
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
+export async function fetchMyEntityAccessRequests(token: string): Promise<EntityAccessRequestRead[]> {
+  const res = await fetch(`${ENV.API_BASE_URL}/entity-access-requests/my`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function approveEntityAccessRequest(
+  requestId: string,
+  token: string,
+  opts?: { admin_note?: string; expires_at?: string },
+): Promise<EntityAccessRequestRead> {
+  const res = await fetch(`${ENV.API_BASE_URL}/entity-access-requests/${requestId}/approve`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(opts ?? {}),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function rejectEntityAccessRequest(
+  requestId: string,
+  token: string,
+  adminNote?: string,
+): Promise<EntityAccessRequestRead> {
+  const res = await fetch(`${ENV.API_BASE_URL}/entity-access-requests/${requestId}/reject`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ admin_note: adminNote }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 

@@ -21,8 +21,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import { searchDocuments } from "@/services/chat.api";
 import {
   createAccessRequest,
+  createEntityAccessRequest,
   fetchMyAccessRequests,
+  fetchMyEntityAccessRequests,
   AccessRequestRead,
+  EntityAccessRequestRead,
 } from "@/services/documents.api";
 import {
   fetchOrgUnits,
@@ -82,6 +85,7 @@ export default function SearchPage() {
   // Access request state
   const [accessRequestMap, setAccessRequestMap] = useState<Map<string, AccessRequestRead>>(new Map());
   const [requestingDocId, setRequestingDocId] = useState<string | null>(null);
+  const [entityRequestMap, setEntityRequestMap] = useState<Map<string, EntityAccessRequestRead>>(new Map());
 
   const { token, user, isCorpMember } = useAuth();
 
@@ -169,6 +173,19 @@ export default function SearchPage() {
         setAccessRequestMap(map);
       })
       .catch(() => {});
+    fetchMyEntityAccessRequests(token)
+      .then((reqs) => {
+        const map = new Map<string, EntityAccessRequestRead>();
+        for (const request of reqs) {
+          const key = `${request.document_id}:${request.document_version_id}`;
+          const existing = map.get(key);
+          if (!existing || new Date(request.created_at) > new Date(existing.created_at)) {
+            map.set(key, request);
+          }
+        }
+        setEntityRequestMap(map);
+      })
+      .catch(() => {});
   }, [token]);
 
   // Submit an access request for a restricted document.
@@ -185,6 +202,27 @@ export default function SearchPage() {
       } else {
         toast({ variant: "destructive", title: "Không thể gửi yêu cầu", description: msg });
       }
+    } finally {
+      setRequestingDocId(null);
+    }
+  };
+
+  const handleRequestEntityAccess = async (result: SearchChunk) => {
+    const versionId = result.metadata.document_version_id;
+    const entityTypes = result.blocked_entity_types ?? result.metadata.blocked_entity_types ?? [];
+    if (!versionId || entityTypes.length === 0) return;
+    const key = `${result.metadata.document_id}:${versionId}`;
+    setRequestingDocId(result.metadata.document_id);
+    try {
+      const request = await createEntityAccessRequest({
+        document_id: result.metadata.document_id,
+        document_version_id: versionId,
+        entity_types: entityTypes,
+      }, token);
+      setEntityRequestMap((prev) => new Map(prev).set(key, request));
+      toast({ variant: "success", title: "Đã gửi yêu cầu quyền xem thực thể" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Không thể gửi yêu cầu", description: err?.message });
     } finally {
       setRequestingDocId(null);
     }
@@ -233,15 +271,15 @@ export default function SearchPage() {
   ];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="enterprise-page flex h-full min-h-0 flex-col">
       <PageHeader
         title="Tìm kiếm"
         description="Tìm kiếm kiến thức dựa trên từ khóa hoặc ngữ nghĩa"
       />
 
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* ── Main content (80%) ── */}
-        <div className="w-4/5 overflow-auto p-6">
+        <div className="page-scroll w-full p-4 sm:p-6 lg:w-4/5">
         <div className="w-full">
           {/* Search input row */}
           <div className="flex gap-2">
@@ -252,7 +290,7 @@ export default function SearchPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Nhập từ khóa..."
-                className="pl-10 pr-4 placeholder:text-[13px] focus-visible:ring-gray-400"
+                className="pl-10 pr-4"
               />
             </div>
 
@@ -260,25 +298,25 @@ export default function SearchPage() {
               value={searchMode}
               onValueChange={(v) => setSearchMode(v as SearchMode)}
             >
-              <SelectTrigger className="w-36 text-[12px] hover:border-gray-400 focus:ring-gray-400">
+              <SelectTrigger className="w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem className="hover:bg-gray-200" value="hybrid">Kết hợp</SelectItem>
-                <SelectItem className="hover:bg-gray-200" value="keyword">Từ khóa</SelectItem>
-                <SelectItem className="hover:bg-gray-200" value="semantic">Ngữ nghĩa</SelectItem>
+                <SelectItem value="hybrid">Kết hợp</SelectItem>
+                <SelectItem value="keyword">Từ khóa</SelectItem>
+                <SelectItem value="semantic">Ngữ nghĩa</SelectItem>
               </SelectContent>
             </Select>
 
             <Button
               variant="outline"
-              className="group gap-2 text-[12px] hover:bg-gray-200 hover:text-gray-900 focus:ring-gray-400"
+              className="group gap-2 text-[12px]"
               onClick={() => setFilterOpen(true)}
             >
               <SlidersHorizontal className="h-4 w-4" />
               Bộ lọc
               {activeFiltersCount > 0 && (
-                <Badge className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-gray-900 p-0 text-xs text-white transition-colors group-hover:bg-white group-hover:text-gray-900 border group-hover:border-gray-900">
+                <Badge variant="secondary" className="ml-1 flex size-5 items-center justify-center rounded-full p-0 text-xs">
                   {activeFiltersCount}
                 </Badge>
               )}
@@ -348,8 +386,10 @@ export default function SearchPage() {
                       result={result}
                       query={query}
                       accessRequest={accessRequestMap.get(result.metadata.document_id)}
+                      entityAccessRequest={result.metadata.document_version_id ? entityRequestMap.get(`${result.metadata.document_id}:${result.metadata.document_version_id}`) : undefined}
                       isRequesting={requestingDocId === result.metadata.document_id}
                       onRequestAccess={handleRequestAccess}
+                      onRequestEntityAccess={handleRequestEntityAccess}
                     />
                   ))}
                 </div>
@@ -377,12 +417,12 @@ export default function SearchPage() {
 
         {/* ── Right sidebar: tips + history ── */}
         {/* ── Right sidebar (20%) ── */}
-        <div className="w-1/5 shrink-0 border-l border-border overflow-y-auto p-4 space-y-4">
+        <div className="hidden w-1/5 shrink-0 flex-col gap-4 overflow-y-auto border-l border-border p-4 lg:flex">
           {/* Search tips card */}
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               
-              <span className="text-[15px] font-semibold text-gray-900">Gợi ý tìm kiếm</span>
+                <span className="text-[15px] font-semibold text-foreground">Gợi ý tìm kiếm</span>
             </div>
             <div className="space-y-3">
               {SEARCH_TIPS.map(({ icon: Icon, title, desc }) => (
@@ -404,7 +444,7 @@ export default function SearchPage() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 
-                <span className="text-[15px] font-semibold text-gray-900">Lịch sử tìm kiếm</span>
+                <span className="text-[15px] font-semibold text-foreground">Lịch sử tìm kiếm</span>
               </div>
               {searchHistory.length > 0 && (
                 <button
@@ -427,7 +467,7 @@ export default function SearchPage() {
                   >
                     <Clock className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
-                      <p className="text-[12px] font-medium text-foreground truncate group-hover:text-gray-900">{entry.query}</p>
+                      <p className="truncate text-[12px] font-medium text-foreground">{entry.query}</p>
                       <p className="text-[10px] text-muted-foreground">{formatHistoryTime(entry.time)}</p>
                     </div>
                   </button>

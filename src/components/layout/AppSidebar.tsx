@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 interface NavItem {
   label: string;
@@ -81,7 +82,7 @@ const navItems: NavItem[] = [
     permission: "audit.view",
   },
   {
-    label: "Cấu hình phân quyền",
+    label: "Cấu hình thực thể",
     icon: ShieldCheck,
     path: "/policy",
     permission: "policy.manage",
@@ -116,10 +117,10 @@ export function AppSidebar() {
   );
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col bg-sidebar border-r border-sidebar-border shadow-card-md">
+    <aside className="flex h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar">
       {/* Logo */}
       <div className="flex h-[4.5rem] items-center gap-3 px-5 border-b border-sidebar-border shrink-0">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-sidebar-primary to-blue-500 shadow-md shadow-blue-500/20">
+        <div className="flex size-9 items-center justify-center rounded-lg bg-sidebar-primary">
           <Building2 className="h-5 w-5 text-white" />
         </div>
         <div className="flex flex-col min-w-0">
@@ -144,9 +145,9 @@ export function AppSidebar() {
                 <NavLink
                   to={item.path}
                   className={cn(
-                    "relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition-all duration-150",
+                    "relative flex items-center gap-3 rounded-md px-3 py-2.5 text-[13px] font-medium transition-colors duration-150",
                     isActive
-                      ? "bg-gradient-to-r from-sidebar-primary/25 to-sidebar-primary/10 text-sidebar-accent-foreground"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/40 hover:text-sidebar-accent-foreground",
                   )}
                 >
@@ -156,9 +157,9 @@ export function AppSidebar() {
                   <Icon className={cn("h-4 w-4 shrink-0", isActive && "text-sidebar-primary")} />
                   <span className="flex-1">{item.label}</span>
                   {item.path === "/approvals" && pendingCount > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white leading-none">
+                    <Badge variant="destructive" className="h-5 min-w-5 px-1 text-[11px] leading-none">
                       {pendingCount > 99 ? "99+" : pendingCount}
-                    </span>
+                    </Badge>
                   )}
                 </NavLink>
               </li>
@@ -171,9 +172,9 @@ export function AppSidebar() {
       {user && (
         <div className="border-t border-sidebar-border p-2.5">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-all duration-150 hover:bg-sidebar-accent/40 group">
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className="bg-gradient-to-br from-sidebar-primary to-blue-500 text-white text-xs font-semibold">
+            <DropdownMenuTrigger className="group flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors duration-150 hover:bg-sidebar-accent/40">
+              <Avatar className="size-8 shrink-0">
+                <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold">
                   {getInitials(user.name)}
                 </AvatarFallback>
               </Avatar>

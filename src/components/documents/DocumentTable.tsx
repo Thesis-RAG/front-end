@@ -255,8 +255,8 @@ export function DocumentTable({
                   </div>
                 </TableCell>
 
-                <TableCell>
-                  <div className="flex items-center gap-1.5">
+                <TableCell className="whitespace-nowrap">
+                  <div className="flex flex-nowrap items-center gap-1.5">
                     <SensitivityBadge level={doc.sensitivity} />
                     {getAccessStatusIcon(doc)}
                   </div>

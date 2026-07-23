@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { SensitivityLevelBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import { getFileTypeStyle } from "@/lib/file-type-icon";
-import { AccessRequestRead } from "@/services/documents.api";
+import { AccessRequestRead, EntityAccessRequestRead } from "@/services/documents.api";
 import { SearchChunk } from "@/types/search";
 import { buildTerms, HighlightedText } from "./highlight";
 import { ChunkContent } from "./ChunkContent";
@@ -14,22 +14,30 @@ export function SearchResultCard({
   result,
   query,
   accessRequest,
+  entityAccessRequest,
   isRequesting,
   onRequestAccess,
+  onRequestEntityAccess,
 }: {
   result: SearchChunk;
   query: string;
   accessRequest?: AccessRequestRead;
+  entityAccessRequest?: EntityAccessRequestRead;
   isRequesting: boolean;
   onRequestAccess: (docId: string) => void;
+  onRequestEntityAccess: (result: SearchChunk) => void;
 }) {
   const isBlurred = result.chunk_blurred === true;
-  const isRestricted = result.doc_restricted === true;
+  const isEntityRestricted = result.entity_access_required === true || result.metadata.entity_access_required === true;
+  const isRestricted = result.doc_restricted === true || isEntityRestricted;
   const terms = buildTerms(query);
 
   const reqStatus = accessRequest?.status;
   const isPending = reqStatus === "pending";
   const isApproved = reqStatus === "approved";
+  const entityReqStatus = entityAccessRequest?.status;
+  const entityPending = entityReqStatus === "pending";
+  const entityApproved = entityReqStatus === "approved";
 
   const docStyle = getFileTypeStyle(result.metadata.document_type, result.metadata.document_id);
   const DocIcon = docStyle.Icon;
@@ -56,6 +64,11 @@ export function SearchResultCard({
             {isRestricted && (
               <Badge variant="outline" className="text-[10px] font-normal text-yellow-600 border-yellow-400">
                 Hạn chế xem
+              </Badge>
+            )}
+            {isEntityRestricted && (
+              <Badge variant="outline" className="border-destructive/50 text-[10px] font-normal text-destructive">
+                Cần quyền: {(result.blocked_entity_types ?? result.metadata.blocked_entity_types ?? []).join(", ")}
               </Badge>
             )}
           </div>
@@ -92,8 +105,8 @@ export function SearchResultCard({
               variant="outline"
               size="sm"
               className="h-8 gap-1.5 text-[11px] shrink-0"
-              disabled={isPending || isApproved || isRequesting}
-              onClick={() => onRequestAccess(result.metadata.document_id)}
+              disabled={isPending || isApproved || entityPending || entityApproved || isRequesting}
+              onClick={() => isEntityRestricted ? onRequestEntityAccess(result) : onRequestAccess(result.metadata.document_id)}
             >
               <Lock className="h-3 w-3" />
               {isRequesting

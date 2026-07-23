@@ -8,6 +8,11 @@ export interface SearchChunk {
   sources: string[];
   doc_restricted?: boolean;
   chunk_blurred?: boolean;
+  entity_access_required?: boolean;
+  entity_access_granted?: boolean;
+  blocked_entity_types?: string[];
+  masked_entity_types?: string[];
+  detected_entity_types?: string[];
   metadata: {
     document_id: string;
     document_title: string;
@@ -17,5 +22,9 @@ export interface SearchChunk {
     page_start: number;
     page_end: number;
     chunk_index: number;
+    document_version_id?: string;
+    blocked_entity_types?: string[];
+    masked_entity_types?: string[];
+    entity_access_required?: boolean;
   };
 }

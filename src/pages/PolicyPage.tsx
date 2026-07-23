@@ -1,368 +1,266 @@
-/**
- * PolicyPage: manage policy domains, entity types, and domain rules.
- * Split into components under src/components/policy/ to keep this file concise.
- */
-import { useState, useEffect, useCallback } from "react";
-import { ShieldCheck, ListChecks, FolderOpen, Package } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Building2, Eye, EyeOff, FileText, Save, ShieldAlert, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { EntityActionSelect, ENTITY_ACTION_STYLES } from "@/components/documents/EntityActionSelect";
+import { EntityScopePicker, type EntityScopeOption } from "@/components/documents/EntityScopePicker";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import type {
-  CreateRulePayload,
-  DomainRule,
-  EntityTypeItem,
-  PolicyDomain,
-  PolicyDomainSummary,
-} from "@/types/policy";
 import {
-  fetchDomains,
-  fetchDomain,
-  updateDomain,
-  deleteDomain,
-  suggestEntityTypes,
-  addEntityType,
-  deleteEntityType,
-  fetchDomainRules,
-  createDomainRule,
-  updateRule,
-  deleteRule,
-} from "@/services/policy.api";
-import { fetchOrgUnits, fetchPositions } from "@/services/org_units.api";
-import { DomainList } from "@/components/policy/DomainList";
-import { DomainDetail } from "@/components/policy/DomainDetail";
-import { DomainRulesTab } from "@/components/policy/DomainRulesTab";
-import { CreateDomainDialog } from "@/components/policy/CreateDomainDialog";
-import { AddEntityDialog } from "@/components/policy/AddEntityDialog";
+  fetchOrgUnits,
+  fetchOrgUnitInstances,
+  fetchPositions,
+  type OrgUnit,
+  type OrgUnitInstance,
+  type Position,
+} from "@/services/org_units.api";
+import type { EntityActionConfig, EntityAction } from "@/services/documents.api";
+import {
+  fetchEntityConfigurations,
+  updateEntityConfiguration,
+  type EntityConfiguration,
+} from "@/services/entity-policy.api";
+
+const ACTION_ICONS: Record<EntityAction, typeof Eye> = {
+  block: ShieldAlert,
+  full: Eye,
+  mask: EyeOff,
+};
 
 export default function PolicyPage() {
   const { token } = useAuth();
+  const [configurations, setConfigurations] = useState<EntityConfiguration[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState("");
+  const [actions, setActions] = useState<EntityActionConfig[]>([]);
+  const [orgUnits, setOrgUnits] = useState<OrgUnit[]>([]);
+  const [orgUnitInstances, setOrgUnitInstances] = useState<OrgUnitInstance[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  // ── Domain list ───────────────────────────────────────────────────────────
-  const [domains, setDomains] = useState<PolicyDomainSummary[]>([]);
-  const [domainsLoading, setDomainsLoading] = useState(false);
-  const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
-  const [selectedDomain, setSelectedDomain] = useState<PolicyDomain | null>(null);
-  const [domainDetailLoading, setDomainDetailLoading] = useState(false);
+  const selected = useMemo(
+    () => configurations.find((item) => item.document_version_id === selectedVersionId) ?? null,
+    [configurations, selectedVersionId],
+  );
 
-  // ── Dialog open flags ─────────────────────────────────────────────────────
-  const [createDomainOpen, setCreateDomainOpen] = useState(false);
-  const [addEntityOpen, setAddEntityOpen] = useState(false);
+  const unitOptions = useMemo<EntityScopeOption[]>(
+    () => orgUnitInstances.map((instance) => ({
+      id: instance.id,
+      label: instance.name,
+      description: orgUnits.find((unit) => unit.id === instance.ou_id)?.name,
+    })),
+    [orgUnitInstances, orgUnits],
+  );
 
-  // ── Locked roles: positions of OU "Công ty" always included in every rule ──
-  const [lockedRoles, setLockedRoles] = useState<string[]>([]);
+  const roleOptions = useMemo<EntityScopeOption[]>(
+    () => positions.map((position) => ({
+      id: position.id,
+      label: position.name,
+      description: orgUnits.find((unit) => unit.id === position.ou_id)?.name,
+    })),
+    [positions, orgUnits],
+  );
 
   useEffect(() => {
-    if (!token) return;
-    Promise.all([fetchOrgUnits(token), fetchPositions(token)])
-      .then(([ous, pos]) => {
-        const companyOu = ous.find((o) => o.parent_id === null);
-        if (!companyOu) return;
-        const names = pos
-          .filter((p) => p.ou_id === companyOu.id)
-          .map((p) => p.name);
-        setLockedRoles(names);
+    Promise.all([
+      fetchEntityConfigurations(token),
+      fetchOrgUnits(token),
+      fetchOrgUnitInstances(token),
+      fetchPositions(token),
+    ])
+      .then(([items, units, instances, availablePositions]) => {
+        setConfigurations(items);
+        setSelectedVersionId(items[0]?.document_version_id ?? "");
+        setOrgUnits(units);
+        setOrgUnitInstances(instances);
+        setPositions(availablePositions);
       })
-      .catch(() => {});
+      .catch((error) => toast({
+        variant: "destructive",
+        title: "Không thể tải cấu hình thực thể",
+        description: String(error),
+      }))
+      .finally(() => setLoading(false));
   }, [token]);
 
-  // ── Active tab ────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState("domains");
+  useEffect(() => {
+    if (!selected) {
+      setActions([]);
+      return;
+    }
+    setActions(selected.actions.map((item) => ({
+      entity_type: item.entity_type,
+      label: item.label,
+      action: item.action,
+      source: item.source,
+      enabled: item.enabled,
+      scope_oui_ids: item.scope_oui_ids ?? [],
+      scope_position_ids: item.scope_position_ids ?? [],
+    })));
+  }, [selected]);
 
-  // ── Rules ─────────────────────────────────────────────────────────────────
-  const [domainRules, setDomainRules] = useState<DomainRule[]>([]);
-  const [rulesLoading, setRulesLoading] = useState(false);
-  const [rulesDomainId, setRulesDomainId] = useState<string>("");
+  const setAction = (entityType: string, action: EntityAction) => {
+    setActions((current) => current.map((item) => item.entity_type === entityType ? { ...item, action } : item));
+  };
 
-  // ── Load domains ──────────────────────────────────────────────────────────
-  const loadDomains = useCallback(async () => {
-    if (!token) return;
-    setDomainsLoading(true);
+  const setScope = (
+    entityType: string,
+    field: "scope_oui_ids" | "scope_position_ids",
+    values: string[],
+  ) => {
+    setActions((current) => current.map((item) => item.entity_type === entityType ? { ...item, [field]: values } : item));
+  };
+
+  const save = async () => {
+    if (!selected) return;
+    setSaving(true);
     try {
-      const data = await fetchDomains(token);
-      setDomains(data);
-    } catch (err) {
-      toast({
-        title: "Lỗi tải domains",
-        description: String(err),
-        variant: "destructive",
-      });
+      const updated = await updateEntityConfiguration(selected.document_version_id, actions, token);
+      setConfigurations((current) => current.map((item) => item.document_version_id === updated.document_version_id ? updated : item));
+      toast({ variant: "success", title: "Đã lưu cấu hình thực thể" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Lưu cấu hình thất bại", description: String(error) });
     } finally {
-      setDomainsLoading(false);
+      setSaving(false);
     }
-  }, [token]);
+  };
 
-  useEffect(() => {
-    loadDomains();
-  }, [loadDomains]);
-
-  // ── Load domain detail when selection changes ─────────────────────────────
-  useEffect(() => {
-    if (!token || !selectedDomainId) {
-      setSelectedDomain(null);
-      return;
-    }
-    setDomainDetailLoading(true);
-    fetchDomain(token, selectedDomainId)
-      .then(setSelectedDomain)
-      .catch((err) =>
-        toast({ title: "Lỗi", description: String(err), variant: "destructive" }),
-      )
-      .finally(() => setDomainDetailLoading(false));
-  }, [token, selectedDomainId]);
-
-  // ── Load domain rules when the Tab 2 selection changes ───────────────────
-  useEffect(() => {
-    if (!token || !rulesDomainId) {
-      setDomainRules([]);
-      return;
-    }
-    setRulesLoading(true);
-    fetchDomainRules(token, rulesDomainId)
-      .then(setDomainRules)
-      .catch(() => {})
-      .finally(() => setRulesLoading(false));
-  }, [token, rulesDomainId]);
-
-  // ── Domain handlers ───────────────────────────────────────────────────────
-  async function handleToggleDomain(domain: PolicyDomainSummary) {
-    if (!token) return;
-    try {
-      await updateDomain(token, domain.id, { is_active: !domain.is_active });
-      await loadDomains();
-      if (selectedDomainId === domain.id) {
-        const updated = await fetchDomain(token, domain.id);
-        setSelectedDomain(updated);
-      }
-    } catch (err) {
-      toast({ title: "Lỗi", description: String(err), variant: "destructive" });
-    }
-  }
-
-  async function handleDeleteDomain(domain: PolicyDomainSummary) {
-    if (!token) return;
-    if (
-      !confirm(
-        `Xóa domain "${domain.name}"? Tất cả rules và entity types sẽ bị xóa theo.`,
-      )
-    )
-      return;
-    try {
-      await deleteDomain(token, domain.id);
-      toast({ title: "Đã xóa domain", description: domain.name });
-      if (selectedDomainId === domain.id) setSelectedDomainId(null);
-      await loadDomains();
-    } catch (err) {
-      toast({ title: "Lỗi xóa", description: String(err), variant: "destructive" });
-    }
-  }
-
-  async function handleDeleteEntityType(et: EntityTypeItem) {
-    if (!token || !selectedDomainId) return;
-    try {
-      await deleteEntityType(token, selectedDomainId, et.id);
-      const updated = await fetchDomain(token, selectedDomainId);
-      setSelectedDomain(updated);
-    } catch (err) {
-      toast({
-        title: "Lỗi xóa entity type",
-        description: String(err),
-        variant: "destructive",
-      });
-    }
-  }
-
-  async function handleSuggestForExisting() {
-    if (!token || !selectedDomain) return;
-    try {
-      const res = await suggestEntityTypes(
-        token,
-        selectedDomain.name,
-        selectedDomain.description ?? undefined,
-      );
-      const newItems = res.entity_types.filter(
-        (s) =>
-          !selectedDomain.entity_types.some(
-            (e) => e.entity_type === s.entity_type,
-          ),
-      );
-      if (newItems.length === 0) {
-        toast({
-          title: "Không có gợi ý mới",
-          description: "Tất cả entity types đã có trong domain.",
-        });
-        return;
-      }
-      await addEntityType(token, selectedDomain.id, {
-        entity_type: newItems[0].entity_type,
-      });
-      // Bulk-add remaining suggestions.
-      if (newItems.length > 1) {
-        const { addEntityTypesBulk } = await import("@/services/policy.api");
-        await addEntityTypesBulk(token, selectedDomain.id, newItems.slice(1));
-      }
-      toast({
-        title: "Đã thêm gợi ý LLM",
-        description: `${newItems.length} entity type(s) mới.`,
-      });
-      const updated = await fetchDomain(token, selectedDomain.id);
-      setSelectedDomain(updated);
-    } catch (err) {
-      toast({ title: "Lỗi gợi ý", description: String(err), variant: "destructive" });
-    }
-  }
-
-  // ── Domain rules handlers ─────────────────────────────────────────────────
-  async function handleCreateDomainRule(payload: CreateRulePayload) {
-    if (!token || !rulesDomainId) return;
-    const rule = await createDomainRule(token, rulesDomainId, payload);
-    setDomainRules((prev) => [...prev, rule]);
-    toast({ title: "Đã tạo rule", description: rule.name });
-  }
-  async function handleUpdateDomainRule(ruleId: string, payload: CreateRulePayload) {
-    if (!token) return;
-    const rule = await updateRule(token, ruleId, payload);
-    setDomainRules((prev) => prev.map((r) => (r.id === ruleId ? rule : r)));
-    toast({ title: "Đã cập nhật rule", description: rule.name });
-  }
-  async function handleDeleteDomainRule(ruleId: string) {
-    if (!token) return;
-    await deleteRule(token, ruleId);
-    setDomainRules((prev) => prev.filter((r) => r.id !== ruleId));
-    toast({ title: "Đã xóa luật" });
-  }
-  async function handleToggleDomainRule(ruleId: string, active: boolean) {
-    if (!token) return;
-    const rule = await updateRule(token, ruleId, { is_active: active });
-    setDomainRules((prev) => prev.map((r) => (r.id === ruleId ? rule : r)));
-    toast({ title: active ? "Rule đã bật" : "Rule đã tắt", description: rule.name });
-  }
-
-  const totalEntities = domains.reduce((s, d) => s + d.entity_type_count, 0);
-  const totalDomainRules = domains.reduce((s, d) => s + d.rule_count, 0);
-
+  const actionCounts = useMemo(() => ({
+    block: actions.filter((item) => item.action === "block").length,
+    mask: actions.filter((item) => item.action === "mask").length,
+    full: actions.filter((item) => item.action === "full").length,
+    scoped: actions.filter((item) => (item.scope_oui_ids?.length ?? 0) > 0 || (item.scope_position_ids?.length ?? 0) > 0).length,
+  }), [actions]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="enterprise-page flex h-full min-h-0 flex-col">
       <PageHeader
-        title="Cấu hình phân quyền"
-        description="Quản lý miền, loại thực thể và luật cho Policy-Contract Agent."
+        title="Cấu hình quyền thực thể"
+        description="Thiết lập hành động và phạm vi áp dụng theo từng thực thể trong mỗi phiên bản tài liệu."
       />
+      <div className="page-scroll flex flex-1 flex-col gap-6 p-4 sm:p-6">
+        <Alert className="border-primary/20 bg-primary/5">
+          <SlidersHorizontal className="size-4" />
+          <AlertTitle>Kiểm soát theo từng giá trị dữ liệu</AlertTitle>
+          <AlertDescription>
+            Rule tác động trên từng span thực thể. Bạn có thể giới hạn rule theo đơn vị và vai trò; để trống phạm vi sẽ áp dụng cho tất cả người dùng.
+          </AlertDescription>
+        </Alert>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-thin">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col overflow-visible">
-          {/* Tab nav bar — at top */}
-          <div className="border-b border-border px-6 shrink-0">
-            <TabsList className="mt-2">
-              <TabsTrigger value="domains" className="gap-2 text-[12.5px]">
-                <ShieldCheck className="h-4 w-4" /> Miền
-              </TabsTrigger>
-              <TabsTrigger value="rules" className="gap-2 text-[12.5px]">
-                <ListChecks className="h-4 w-4" /> Luật theo miền
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          {/* ── Stat cards — domains tab only ── */}
-          {activeTab !== "rules" && (
-            <div className="grid grid-cols-1 gap-4 px-6 pt-4 pb-2 shrink-0 sm:grid-cols-3">
-              {[
-                { label: "Tổng miền dữ liệu",   value: domains.length,   icon: FolderOpen, bg: "bg-blue-50 dark:bg-blue-950/40",   iconCls: "text-blue-600"   },
-                { label: "Tổng thực thể",         value: totalEntities,    icon: Package,    bg: "bg-green-50 dark:bg-green-950/40",  iconCls: "text-green-600"  },
-                { label: "Tổng luật theo miền",   value: totalDomainRules, icon: ListChecks, bg: "bg-purple-50 dark:bg-purple-950/40",iconCls: "text-purple-600" },
-              ].map(({ label, value, icon: Icon, bg, iconCls }) => (
-                <div key={label} className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-                  <div className={`h-11 w-11 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
-                    <Icon className={`h-5 w-5 ${iconCls}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[12px] text-muted-foreground font-medium">{label}</p>
-                    <p className="text-2xl font-bold text-foreground mt-0.5">
-                      {domainsLoading ? "—" : value.toLocaleString("vi-VN")}
-                    </p>
-                  </div>
-                </div>
-              ))}
+        {loading ? (
+          <Card><CardContent className="py-10 text-sm text-muted-foreground">Đang tải cấu hình...</CardContent></Card>
+        ) : configurations.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-14 text-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <FileText className="size-6 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="font-medium">Chưa có phiên bản tài liệu</p>
+                <p className="mt-1 text-sm text-muted-foreground">Các file đã được ingest sẽ xuất hiện tại đây.</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Card><CardContent className="flex items-center gap-3 p-4"><FileText className="size-4 text-primary" /><div><p className="text-xl font-semibold">{actions.length}</p><p className="text-xs text-muted-foreground">Thực thể</p></div></CardContent></Card>
+              <Card><CardContent className="flex items-center gap-3 p-4"><ShieldAlert className="size-4 text-destructive" /><div><p className="text-xl font-semibold">{actionCounts.block}</p><p className="text-xs text-muted-foreground">Chặn</p></div></CardContent></Card>
+              <Card><CardContent className="flex items-center gap-3 p-4"><EyeOff className="size-4 text-warning" /><div><p className="text-xl font-semibold">{actionCounts.mask}</p><p className="text-xs text-muted-foreground">Che</p></div></CardContent></Card>
+              <Card><CardContent className="flex items-center gap-3 p-4"><Building2 className="size-4 text-info" /><div><p className="text-xl font-semibold">{actionCounts.scoped}</p><p className="text-xs text-muted-foreground">Có phạm vi</p></div></CardContent></Card>
             </div>
-          )}
 
-          {/* ── Tab 1: Domains ───────────────────────────────────────────── */}
-          <TabsContent
-            value="domains"
-            className="mt-0 flex min-h-[520px] flex-1 flex-col overflow-hidden md:min-h-[560px]"
-            style={{ display: activeTab === "domains" ? "flex" : "none" }}
-          >
-            <div
-              className="flex min-h-0 flex-1 gap-5 px-6 pt-4 pb-6"
-              style={{ display: activeTab === "domains" ? "flex" : "none" }}
-            >
-              <DomainList
-                domains={domains}
-                loading={domainsLoading}
-                selectedDomainId={selectedDomainId}
-                onSelectDomain={setSelectedDomainId}
-                onCreateClick={() => setCreateDomainOpen(true)}
-              />
-              <DomainDetail
-                selectedDomainId={selectedDomainId}
-                selectedDomain={selectedDomain}
-                loading={domainDetailLoading}
-                domains={domains}
-                onToggleDomain={handleToggleDomain}
-                onDeleteDomain={handleDeleteDomain}
-                onDeleteEntityType={handleDeleteEntityType}
-                onSuggestForExisting={handleSuggestForExisting}
-                onAddEntityClick={() => setAddEntityOpen(true)}
-              />
+            <div className="grid gap-6 lg:grid-cols-[290px_minmax(0,1fr)]">
+              <Card className="h-fit">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Phiên bản tài liệu</CardTitle>
+                  <CardDescription>Chọn file cần cấu hình.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2">
+                  {configurations.map((item) => (
+                    <Button
+                      key={item.document_version_id}
+                      variant={selectedVersionId === item.document_version_id ? "secondary" : "ghost"}
+                      className="h-auto justify-start px-3 py-2.5 text-left"
+                      onClick={() => setSelectedVersionId(item.document_version_id)}
+                    >
+                      <span className="flex min-w-0 flex-col gap-1">
+                        <span className="truncate text-sm font-medium">{item.document_title}</span>
+                        <span className="truncate text-[11px] text-muted-foreground">v{item.version_no} · {item.file_name}</span>
+                      </span>
+                    </Button>
+                  ))}
+                </CardContent>
+                <CardFooter className="border-t px-4 py-3 text-xs text-muted-foreground">
+                  {configurations.length} phiên bản đang được quản lý
+                </CardFooter>
+              </Card>
+
+              {selected && (
+                <Card>
+                  <CardHeader className="flex-row items-start justify-between gap-4 border-b space-y-0">
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-base">{selected.document_title}</CardTitle>
+                      <CardDescription className="mt-1 truncate">{selected.file_name} · phiên bản {selected.version_no}</CardDescription>
+                    </div>
+                    <Button onClick={save} disabled={saving} className="shrink-0">
+                      <Save data-icon="inline-start" />
+                      {saving ? "Đang lưu..." : "Lưu cấu hình"}
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3 pt-5">
+                    {actions.length === 0 ? (
+                      <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">Không có entity được detect trong file này.</p>
+                    ) : actions.map((item) => {
+                      const Icon = ACTION_ICONS[item.action];
+                      return (
+                        <div key={item.entity_type} className="rounded-xl border bg-muted/20 p-4">
+                          <div className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                              <div className={"flex size-9 shrink-0 items-center justify-center rounded-lg " + ENTITY_ACTION_STYLES[item.action].trigger}>
+                                <Icon className={"size-4 " + ENTITY_ACTION_STYLES[item.action].icon} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Badge variant="outline" className="font-mono text-[11px]">{item.entity_type}</Badge>
+                                  <span className="text-xs text-muted-foreground">{selected.actions.find((action) => action.entity_type === item.entity_type)?.detection_count ?? 0} lần phát hiện</span>
+                                </div>
+                                <p className="mt-1 text-xs text-muted-foreground">Chọn hành động và đối tượng được áp dụng rule.</p>
+                              </div>
+                              <EntityActionSelect
+                                value={item.action}
+                                onValueChange={(value) => setAction(item.entity_type, value)}
+                                className="w-full sm:w-[210px] sm:shrink-0"
+                              />
+                            </div>
+                            <div className="rounded-lg border border-dashed bg-background/70 p-3">
+                              <div className="mb-2 flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium">Phạm vi áp dụng</span>
+                                <span className="text-[10px] text-muted-foreground">Để trống để áp dụng toàn hệ thống</span>
+                              </div>
+                              <EntityScopePicker
+                                unitOptions={unitOptions}
+                                roleOptions={roleOptions}
+                                scopeOuiIds={item.scope_oui_ids ?? []}
+                                scopePositionIds={item.scope_position_ids ?? []}
+                                onScopeOuiIdsChange={(values) => setScope(item.entity_type, "scope_oui_ids", values)}
+                                onScopePositionIdsChange={(values) => setScope(item.entity_type, "scope_position_ids", values)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
             </div>
-          </TabsContent>
-
-          {/* ── Tab 2: Rules by domain ────────────────────────────────────── */}
-          <TabsContent
-            value="rules"
-            className="mt-0 flex min-h-[520px] flex-1 flex-col overflow-hidden md:min-h-[560px]"
-            style={{ display: activeTab === "rules" ? "flex" : "none" }}
-          >
-            <div
-              className="flex min-h-0 flex-1"
-              style={{ display: activeTab === "rules" ? "flex" : "none" }}
-            >
-              <DomainRulesTab
-                domains={domains}
-                rulesDomainId={rulesDomainId}
-                setRulesDomainId={setRulesDomainId}
-                domainRules={domainRules}
-                rulesLoading={rulesLoading}
-                selectedDomain={selectedDomain}
-                onCreateRule={handleCreateDomainRule}
-                onUpdateRule={handleUpdateDomainRule}
-                onDeleteRule={handleDeleteDomainRule}
-                onToggleRule={handleToggleDomainRule}
-                lockedRoles={lockedRoles}
-              />
-            </div>
-          </TabsContent>
-
-        </Tabs>
+          </>
+        )}
       </div>
-
-      <CreateDomainDialog
-        open={createDomainOpen}
-        onClose={() => setCreateDomainOpen(false)}
-        token={token}
-        onCreated={async (domain) => {
-          await loadDomains();
-          setSelectedDomainId(domain.id);
-        }}
-      />
-
-      <AddEntityDialog
-        open={addEntityOpen}
-        onClose={() => setAddEntityOpen(false)}
-        selectedDomainId={selectedDomainId}
-        token={token}
-        onAdded={setSelectedDomain}
-      />
     </div>
   );
 }

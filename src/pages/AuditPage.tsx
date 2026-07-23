@@ -119,14 +119,14 @@ const JOB_STATUSES = ["queued", "running", "succeeded", "failed"] as const;
 // Thin shell: renders the page header and delegates content to QueryLogsTab and JobsTab.
 export default function AuditPage() {
   return (
-    <div className="flex h-full flex-col">
+    <div className="enterprise-page flex h-full min-h-0 flex-col">
       <PageHeader
         title="Kiểm toán"
         description="Xem lại lịch sử truy vấn và trạng thái công việc nền của hệ thống."
       />
-      <div className="flex-1 overflow-auto">
+      <div className="page-scroll flex-1">
         <Tabs defaultValue="queries" className="h-full flex flex-col">
-          <div className="border-b border-border px-6">
+          <div className="border-b border-border px-4 sm:px-6">
             <TabsList className="mt-2">
               <TabsTrigger className="text-[12px]" value="queries">
                 Logs Truy vấn
@@ -136,10 +136,10 @@ export default function AuditPage() {
               </TabsTrigger>
             </TabsList>
           </div>
-          <TabsContent value="queries" className="flex-1 p-6 mt-0">
+          <TabsContent value="queries" className="mt-0 flex-1 p-4 sm:p-6">
             <QueryLogsTab />
           </TabsContent>
-          <TabsContent value="jobs" className="flex-1 p-6 mt-0">
+          <TabsContent value="jobs" className="mt-0 flex-1 p-4 sm:p-6">
             <JobsTab />
           </TabsContent>
         </Tabs>
@@ -264,8 +264,8 @@ function QueryLogsTab() {
       <div className="grid grid-cols-5 gap-4">
         {/* Total */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0">
-            <Activity className="h-5 w-5 text-blue-600" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-info/10">
+            <Activity className="h-5 w-5 text-info" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Tổng truy vấn</p>
@@ -273,7 +273,7 @@ function QueryLogsTab() {
               {total.toLocaleString("vi-VN")}
             </p>
             {weekChange !== null ? (
-              <p className={`text-[11px] mt-1 flex items-center gap-0.5 font-medium ${weekChange >= 0 ? "text-green-600" : "text-red-500"}`}>
+              <p className={`mt-1 flex items-center gap-0.5 text-[11px] font-medium ${weekChange >= 0 ? "text-success" : "text-destructive"}`}>
                 {weekChange >= 0
                   ? <TrendingUp className="h-3 w-3" />
                   : <TrendingDown className="h-3 w-3" />}
@@ -287,50 +287,50 @@ function QueryLogsTab() {
 
         {/* Completed */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-green-50 dark:bg-green-950/40 flex items-center justify-center shrink-0">
-            <CheckCircle className="h-5 w-5 text-green-600" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-success/10">
+            <CheckCircle className="h-5 w-5 text-success" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Hoàn thành</p>
             <p className="text-2xl font-bold text-foreground mt-0.5">
               {completedCount.toLocaleString("vi-VN")}
             </p>
-            <p className="text-[11px] mt-1 text-green-600 font-medium">{pct(completedCount)}</p>
+            <p className="mt-1 text-[11px] font-medium text-success">{pct(completedCount)}</p>
           </div>
         </div>
 
         {/* Running */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center shrink-0">
-            <RefreshCw className="h-5 w-5 text-amber-500" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-warning/10">
+            <RefreshCw className="h-5 w-5 text-warning" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Đang chạy</p>
             <p className="text-2xl font-bold text-foreground mt-0.5">
               {runningCount.toLocaleString("vi-VN")}
             </p>
-            <p className="text-[11px] mt-1 text-amber-500 font-medium">{pct(runningCount)}</p>
+            <p className="mt-1 text-[11px] font-medium text-warning">{pct(runningCount)}</p>
           </div>
         </div>
 
         {/* Error */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Lỗi / Bị chặn</p>
             <p className="text-2xl font-bold text-foreground mt-0.5">
               {errorCount.toLocaleString("vi-VN")}
             </p>
-            <p className="text-[11px] mt-1 text-red-500 font-medium">{pct(errorCount)}</p>
+            <p className="mt-1 text-[11px] font-medium text-destructive">{pct(errorCount)}</p>
           </div>
         </div>
 
         {/* Avg latency */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-violet-50 dark:bg-violet-950/40 flex items-center justify-center shrink-0">
-            <Timer className="h-5 w-5 text-violet-500" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Timer className="h-5 w-5 text-primary" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Độ trễ TB</p>
@@ -484,7 +484,9 @@ function QueryLogsTab() {
                               )}
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Copy trace ID</TooltipContent>
+                          <TooltipContent className="text-white">
+                            Copy trace ID
+                          </TooltipContent>
                         </Tooltip>
                       </div>
                     </TableCell>
@@ -588,8 +590,8 @@ function JobsTab() {
       <div className="grid grid-cols-4 gap-4">
         {/* Queued */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-slate-100 dark:bg-slate-800/60 flex items-center justify-center shrink-0">
-            <Clock className="h-5 w-5 text-slate-500" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted">
+            <Clock className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Hàng đợi</p>
@@ -602,13 +604,13 @@ function JobsTab() {
 
         {/* Running */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center shrink-0">
-            <Loader2 className="h-5 w-5 text-amber-500 animate-spin" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-warning/10">
+            <Loader2 className="h-5 w-5 animate-spin text-warning" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Đang chạy</p>
             <p className="text-2xl font-bold text-foreground mt-0.5">{jobCounts.running}</p>
-            <p className="text-[11px] mt-1 text-amber-500 font-medium">
+            <p className="mt-1 text-[11px] font-medium text-warning">
               {jobTotal === 0 ? "0%" : `${((jobCounts.running / jobTotal) * 100).toFixed(1)}%`}
             </p>
           </div>
@@ -616,13 +618,13 @@ function JobsTab() {
 
         {/* Succeeded */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-green-50 dark:bg-green-950/40 flex items-center justify-center shrink-0">
-            <CheckCircle className="h-5 w-5 text-green-600" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-success/10">
+            <CheckCircle className="h-5 w-5 text-success" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Thành công</p>
             <p className="text-2xl font-bold text-foreground mt-0.5">{jobCounts.succeeded}</p>
-            <p className="text-[11px] mt-1 text-green-600 font-medium">
+            <p className="mt-1 text-[11px] font-medium text-success">
               {jobTotal === 0 ? "0%" : `${((jobCounts.succeeded / jobTotal) * 100).toFixed(1)}%`}
             </p>
           </div>
@@ -630,13 +632,13 @@ function JobsTab() {
 
         {/* Failed */}
         <div className="rounded-xl border border-border bg-card p-5 flex items-start gap-4 shadow-sm">
-          <div className="h-11 w-11 rounded-lg bg-red-50 dark:bg-red-950/40 flex items-center justify-center shrink-0">
-            <XCircle className="h-5 w-5 text-red-500" />
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+            <XCircle className="h-5 w-5 text-destructive" />
           </div>
           <div className="min-w-0">
             <p className="text-[12px] text-muted-foreground font-medium">Thất bại</p>
             <p className="text-2xl font-bold text-foreground mt-0.5">{jobCounts.failed}</p>
-            <p className="text-[11px] mt-1 text-red-500 font-medium">
+            <p className="mt-1 text-[11px] font-medium text-destructive">
               {jobTotal === 0 ? "0%" : `${((jobCounts.failed / jobTotal) * 100).toFixed(1)}%`}
             </p>
           </div>

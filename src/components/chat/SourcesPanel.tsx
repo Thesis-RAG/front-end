@@ -5,7 +5,7 @@ import { Citation } from "@/types";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { openDocumentFile } from "@/services/documents.api";
+import { createEntityAccessRequest, openDocumentFile } from "@/services/documents.api";
 import { fetchDocumentFileAsText } from "@/services/documents.api";
 import { toast } from "@/hooks/use-toast";
 
@@ -446,6 +446,8 @@ export function SourcesPanel({
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [attachingId, setAttachingId] = useState<string | null>(null);
+  const [requestingEntityId, setRequestingEntityId] = useState<string | null>(null);
+  const [requestedEntityIds, setRequestedEntityIds] = useState<Set<string>>(new Set());
 
   // Auto-expand the citation card when opened via a citation badge click; "Nguồn" button passes null → no expand.
   useEffect(() => {
@@ -478,6 +480,24 @@ export function SourcesPanel({
       toast({ variant: "destructive", title: "Cannot open document" });
     } finally {
       setOpeningId(null);
+    }
+  };
+
+  const handleRequestEntityAccess = async (citation: Citation) => {
+    if (!citation.versionId || !citation.blockedEntityTypes?.length) return;
+    setRequestingEntityId(citation.id);
+    try {
+      await createEntityAccessRequest({
+        document_id: citation.documentId,
+        document_version_id: citation.versionId,
+        entity_types: citation.blockedEntityTypes,
+      }, token);
+      setRequestedEntityIds((current) => new Set(current).add(citation.id));
+      toast({ variant: "success", title: "Đã gửi yêu cầu quyền xem thực thể" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Không thể gửi yêu cầu", description: error?.message });
+    } finally {
+      setRequestingEntityId(null);
     }
   };
 
@@ -626,7 +646,7 @@ export function SourcesPanel({
                       className="flex items-center gap-1 shrink-0 ml-auto justify-end"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      {!isGmailSource(citation) && !citation.docRestricted && (
+                      {!isGmailSource(citation) && !citation.docRestricted && !citation.entityAccessRequired && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -638,7 +658,18 @@ export function SourcesPanel({
                           <Eye className="h-3 w-3" />
                         </Button>
                       )}
-                      {!isGmailSource(citation) && !citation.docRestricted && (
+                      {!isGmailSource(citation) && citation.entityAccessRequired && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-6 text-[10px]"
+                          disabled={requestingEntityId === citation.id || requestedEntityIds.has(citation.id)}
+                          onClick={() => handleRequestEntityAccess(citation)}
+                        >
+                          {requestingEntityId === citation.id ? "Đang gửi..." : "Yêu cầu quyền thực thể"}
+                        </Button>
+                      )}
+                      {!isGmailSource(citation) && !citation.docRestricted && !citation.entityAccessRequired && (
                         <Button
                           variant="ghost"
                           size="icon"

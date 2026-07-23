@@ -4,11 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 127.0.0.1 --port 8083 --strictPort",
+    "dev:local": "vite --mode development --host 127.0.0.1 --port 8083 --strictPort",
     "build": "vite build",
+    "build:local": "vite build --mode development",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "preview:local": "vite preview --mode development --host 127.0.0.1 --port 4173 --strictPort"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

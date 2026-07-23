@@ -21,6 +21,9 @@ import {
 import { SENSITIVITY_LEVEL } from "@/types";
 import { OrgUnit, OrgUnitInstance } from "@/services/org_units.api";
 import { OuiMultiSelect } from "./OuiMultiSelect";
+import { EntityDetectionPanel } from "./EntityDetectionPanel";
+import type { EntityScopeOption } from "./EntityScopePicker";
+import type { EntityActionConfig, EntityPreview } from "@/services/documents.api";
 
 interface UploadDialogProps {
   open: boolean;
@@ -37,6 +40,12 @@ interface UploadDialogProps {
   uploading: boolean;
   onUpload: () => void;
   fileInputRef: RefObject<HTMLInputElement>;
+  entityPreview: EntityPreview | null;
+  entityActions: EntityActionConfig[];
+  setEntityActions: (actions: EntityActionConfig[]) => void;
+  detectingEntities: boolean;
+  entityUnitOptions: EntityScopeOption[];
+  entityRoleOptions: EntityScopeOption[];
 }
 
 export function UploadDialog({
@@ -54,10 +63,16 @@ export function UploadDialog({
   uploading,
   onUpload,
   fileInputRef,
+  entityPreview,
+  entityActions,
+  setEntityActions,
+  detectingEntities,
+  entityUnitOptions,
+  entityRoleOptions,
 }: UploadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[540px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]">
         <DialogHeader>
           <DialogTitle>Tải lên tài liệu</DialogTitle>
           <DialogDescription className="text-[12.5px]">
@@ -76,6 +91,14 @@ export function UploadDialog({
               onChange={setUploadOuiIds}
             />
           </div>
+          <EntityDetectionPanel
+            preview={entityPreview}
+            actions={entityActions}
+            onChange={setEntityActions}
+            loading={detectingEntities}
+            unitOptions={entityUnitOptions}
+            roleOptions={entityRoleOptions}
+          />
           <div className="grid gap-2">
             <Label className="text-xs text-muted-foreground">Độ nhạy cảm</Label>
             <Select

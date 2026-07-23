@@ -12,9 +12,9 @@ export function AppLayout() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-100/70 dark:bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-muted/30">
       <AppSidebar />
-      <main className="min-w-0 flex-1 overflow-hidden bg-background/80">
+      <main className="enterprise-page min-w-0 flex-1 overflow-hidden">
         <Outlet />
       </main>
     </div>

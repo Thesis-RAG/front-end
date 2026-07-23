@@ -14,6 +14,7 @@ import {
   Settings,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -386,10 +387,10 @@ export default function GmailPage() {
     : emails;
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="enterprise-page flex h-full min-h-0 flex-col">
       {/* ── Custom header ── */}
-      <header className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur-sm px-6 py-3 shadow-sm">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-10 border-b border-border bg-card/95 px-4 py-3 backdrop-blur-sm sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
           {/* Title */}
           <div className="shrink-0">
             <h1 className="text-xl font-bold tracking-tight">Gmail</h1>
@@ -400,14 +401,14 @@ export default function GmailPage() {
 
           {/* Search bar — only when connected */}
           {connected && (
-            <div className="w-[1000px] relative ml-20">
+            <div className="relative min-w-0 max-w-3xl flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <input
+              <Input
                 ref={emailSearchRef}
                 value={emailSearch}
                 onChange={(e) => setEmailSearch(e.target.value)}
                 placeholder="Tìm kiếm email, người gửi, nội dung..."
-                className="w-full h-9 pl-9 pr-16 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground placeholder:text-[12.5px]"
+                className="h-9 pl-9 pr-16"
               />
               <kbd className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground bg-muted/80 px-1.5 py-0.5 rounded border border-border font-mono select-none pointer-events-none">
                 Ctrl K
@@ -456,7 +457,8 @@ export default function GmailPage() {
                 {/* Disconnect */}
                 <Button
                   size="sm"
-                  className="gap-1.5 h-9 text-[12.5px] bg-red-500 hover:bg-red-700 text-white"
+                  variant="destructive"
+                  className="h-9 gap-1.5 text-[12.5px]"
                   onClick={handleDisconnect}
                 >
                   Ngắt kết nối
@@ -474,7 +476,7 @@ export default function GmailPage() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden">
         {!connected ? (
           <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
             <Mail className="h-16 w-16 opacity-20" />
@@ -531,7 +533,7 @@ export default function GmailPage() {
                       }}
                       className={`group w-full flex items-start gap-3 px-4 py-3 text-left border-b border-border/40 transition-colors ${
                         isSelected
-                          ? "bg-[#c2dbff] dark:bg-blue-900/30"
+                        ? "bg-primary/10"
                           : "bg-background hover:bg-muted/50"
                       }`}
                     >
@@ -567,7 +569,7 @@ export default function GmailPage() {
                             {email.snippet}
                           </p>
                           {email.synced && (
-                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 border border-green-200 font-medium leading-none">
+                        <span className="shrink-0 rounded-md border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-medium leading-none text-success">
                               Đã sync
                             </span>
                           )}
@@ -591,7 +593,7 @@ export default function GmailPage() {
                     </h2>
                     <div className="flex items-center gap-2 shrink-0">
                       {selectedEmail.synced ? (
-                        <span className="text-[11px] px-2 py-1 rounded-md bg-green-100 text-green-700 border border-green-200 font-medium">
+                        <span className="rounded-md border border-success/30 bg-success/10 px-2 py-1 text-[11px] font-medium text-success">
                           Đã đồng bộ RAG
                         </span>
                       ) : (

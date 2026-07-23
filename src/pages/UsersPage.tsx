@@ -13,7 +13,7 @@ export default function UsersPage() {
   const [orgRefresh, setOrgRefresh] = useState(0);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="enterprise-page flex h-full min-h-0 flex-col">
       <PageHeader
         title="Người dùng & Tổ chức"
         description="Quản lý người dùng, cơ cấu tổ chức và phân quyền"
@@ -23,13 +23,13 @@ export default function UsersPage() {
           ) : null
         }
       />
-      <div className="flex-1 overflow-auto">
+      <div className="page-scroll flex-1">
         <Tabs
           value={activeTab}
           onValueChange={setActiveTab}
           className="h-full flex flex-col"
         >
-          <div className="border-b border-border px-6">
+          <div className="border-b border-border px-4 sm:px-6">
             <TabsList className="mt-2">
               <TabsTrigger value="users" className="gap-2 text-[12.5px]">
                 <Users className="h-4 w-4" /> Người dùng
@@ -39,13 +39,13 @@ export default function UsersPage() {
               </TabsTrigger>
             </TabsList>
           </div>
-          <TabsContent value="users" className="flex-1 p-6 mt-0">
+          <TabsContent value="users" className="mt-0 min-w-0 flex-1 p-4 sm:p-6">
             <UsersTab
               refreshTrigger={userRefresh}
               onOrgChange={() => setOrgRefresh((n) => n + 1)}
             />
           </TabsContent>
-          <TabsContent value="org" className="flex-1 p-6 mt-0">
+          <TabsContent value="org" className="mt-0 min-w-0 flex-1 p-4 sm:p-6">
             <OrgTab refreshTrigger={orgRefresh} />
           </TabsContent>
         </Tabs>

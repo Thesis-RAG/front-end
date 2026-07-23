@@ -14,6 +14,8 @@ import {
   Paperclip,
   ShieldAlert,
   Shield,
+  Eye,
+  EyeOff,
   AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -436,6 +438,10 @@ export function ChatMessage({
                   "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
                   rule.action === "block"
                     ? "border-red-200 bg-red-50 text-red-700"
+                    : rule.action === "full"
+                      ? "border-success/40 bg-success/10 text-success"
+                    : rule.action === "mask"
+                      ? "border-warning/50 bg-warning/10 text-warning"
                     : rule.action === "conditional"
                       ? "border-purple-200 bg-purple-50 text-purple-700"
                       : rule.action === "watermark"
@@ -443,7 +449,11 @@ export function ChatMessage({
                         : "border-border bg-muted text-muted-foreground",
                 )}
               >
-                {rule.action === "watermark"
+                {rule.action === "full"
+                  ? <Eye className="h-3 w-3 shrink-0 text-success" />
+                  : rule.action === "mask"
+                  ? <EyeOff className="h-3 w-3 shrink-0 text-warning" />
+                  : rule.action === "watermark"
                   ? <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />
                   : <Shield className="h-3 w-3 shrink-0" />}
                 <span>{rule.name}</span>
@@ -453,6 +463,10 @@ export function ChatMessage({
                       "ml-0.5 rounded-full px-1.5 text-[10px] font-semibold",
                       rule.action === "block"
                         ? "bg-red-100 text-red-600"
+                        : rule.action === "full"
+                          ? "bg-success/20 text-success"
+                        : rule.action === "mask"
+                          ? "bg-warning/20 text-warning"
                         : rule.action === "conditional"
                           ? "bg-purple-100 text-purple-600"
                           : rule.action === "watermark"

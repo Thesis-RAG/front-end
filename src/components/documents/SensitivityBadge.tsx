@@ -6,7 +6,7 @@ export function SensitivityBadge({ level, className }: { level: number; classNam
   return (
     <span
       className={cn(
-        "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium",
+        "inline-flex items-center whitespace-nowrap px-2 py-0.5 rounded text-xs font-medium",
         SENSITIVITY_COLOR[level] ?? "bg-gray-100 text-gray-700",
         className,
       )}

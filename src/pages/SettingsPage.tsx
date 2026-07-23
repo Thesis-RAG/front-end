@@ -189,20 +189,20 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="enterprise-page flex h-full min-h-0 flex-col">
       <PageHeader
         title="Cài đặt"
         description="Quản lý cấu hình hệ thống và tích hợp"
         actions={
-          <Button className="gap-2 bg-gray-900">
-            <Save className="h-4 w-4" />
+          <Button variant="default" className="gap-2">
+            <Save data-icon="inline-start" />
             Lưu thay đổi
           </Button>
         }
       />
 
-      <div className="flex-1 overflow-auto p-6">
-        <div className="mx-auto max-w-3xl space-y-6">
+      <div className="page-scroll flex-1 p-4 sm:p-6">
+        <div className="mx-auto flex max-w-3xl flex-col gap-6">
           <Card>
             <CardHeader>
               <CardTitle>Model LLM</CardTitle>
@@ -218,110 +218,11 @@ export default function SettingsPage() {
                 <div className="space-y-2"><Label>Embedding model</Label><Select value={embeddingModel} onValueChange={setEmbeddingModel}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="text-embedding-3-small">text-embedding-3-small</SelectItem><SelectItem value="text-embedding-3-large">text-embedding-3-large</SelectItem></SelectContent></Select></div>
               </div>
               <p className="text-xs text-muted-foreground">Đổi embedding model nên đi kèm re-index tài liệu cũ.</p>
-              <div><Button onClick={handleSaveLlm} disabled={llmSaving}>{llmSaving ? "Đang lưu..." : "Lưu cấu hình LLM"}</Button></div>
-            </CardContent>
-          </Card>
-          {/* ── Google Drive Integration ─────────────────────────────── */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <div>
-                  <CardTitle className="mb-2">Tích hợp Google Drive</CardTitle>
-                  <CardDescription>
-                    Kết nối thư mục Google Drive để đính kèm tệp vào cuộc trò
-                    chuyện.
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="driveFolderUrl">Link chia sẻ thư mục</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="driveFolderUrl"
-                    value={driveFolderUrl}
-                    onChange={(e) => {
-                      setDriveFolderUrl(e.target.value);
-                      setDriveStatus("idle");
-                    }}
-                    placeholder="https://drive.google.com/drive/folders/..."
-                    className={cn(
-                      "flex-1",
-                      driveStatus === "ok" &&
-                        "border-green-500 focus-visible:ring-green-500",
-                      driveStatus === "error" &&
-                        "border-destructive focus-visible:ring-destructive",
-                    )}
-                  />
-                  <Button
-                    variant="secondary"
-                    onClick={handleVerifyDrive}
-                    disabled={driveVerifying || !driveFolderUrl.trim()}
-                    className="shrink-0"
-                  >
-                    {driveVerifying ? "Đang xác minh..." : "Xác minh"}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Thư mục phải được chia sẻ với quyền{" "}
-                  <span className="font-medium text-foreground">
-                    "Bất kỳ ai có đường link đều có thể xem"
-                  </span>{" "}
-                  trong Google Drive.{" "}
-                  <a
-                    href="https://support.google.com/drive/answer/2494822"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-0.5 text-primary hover:underline"
-                  >
-                    Hướng dẫn
-                    <ExternalLink className="h-3 w-3" />
-                  </a>
-                </p>
-              </div>
-
-              {driveStatus === "ok" && (
-                <div className="flex items-start gap-2 rounded-lg bg-green-500/10 border border-green-500/20 p-3">
-                  <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-medium text-green-700 dark:text-green-400">
-                      Kết nối thành công
-                    </p>
-                    {driveFileCount !== null && (
-                      <p className="text-xs text-green-600 dark:text-green-500">
-                        Tìm thấy {driveFileCount} tệp trong thư mục. Bạn có thể
-                        dùng biểu tượng <HardDrive className="inline h-3 w-3" />{" "}
-                        trong chat để chọn tệp.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {driveStatus === "error" && driveError && (
-                <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 p-3">
-                  <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-medium text-destructive">
-                      Lỗi kết nối
-                    </p>
-                    <p className="text-xs text-destructive/80">{driveError}</p>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center">
-                {driveStatus === "ok" && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleClearDrive}
-                    className="ml-auto text-white bg-red-500 hover:bg-red-600 text-xs"
-                  >
-                    Xóa cấu hình Drive
-                  </Button>
-                )}
+              <div>
+                <Button variant="default" className="gap-2" onClick={handleSaveLlm} disabled={llmSaving}>
+                  <Save data-icon="inline-start" className={llmSaving ? "animate-spin" : undefined} />
+                  {llmSaving ? "Đang lưu..." : "Lưu cấu hình LLM"}
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -549,6 +450,112 @@ export default function SettingsPage() {
                   Thời gian hết phiên (phút)
                 </Label>
                 <Input id="sessionTimeout" type="number" defaultValue={60} />
+              </div>
+            </CardContent>
+          </Card>
+
+          
+          {/* ── Google Drive Integration ─────────────────────────────── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <div>
+                  <CardTitle className="mb-2">Tích hợp Google Drive</CardTitle>
+                  <CardDescription>
+                    Kết nối thư mục Google Drive để đính kèm tệp vào cuộc trò
+                    chuyện.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="driveFolderUrl">Link chia sẻ thư mục</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="driveFolderUrl"
+                    value={driveFolderUrl}
+                    onChange={(e) => {
+                      setDriveFolderUrl(e.target.value);
+                      setDriveStatus("idle");
+                    }}
+                    placeholder="https://drive.google.com/drive/folders/..."
+                    className={cn(
+                      "flex-1",
+                      driveStatus === "ok" &&
+                        "border-green-500 focus-visible:ring-green-500",
+                      driveStatus === "error" &&
+                        "border-destructive focus-visible:ring-destructive",
+                    )}
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={handleVerifyDrive}
+                    disabled={driveVerifying || !driveFolderUrl.trim()}
+                    className="shrink-0"
+                  >
+                    {driveVerifying ? "Đang xác minh..." : "Xác minh"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Thư mục phải được chia sẻ với quyền{" "}
+                  <span className="font-medium text-foreground">
+                    "Bất kỳ ai có đường link đều có thể xem"
+                  </span>{" "}
+                  trong Google Drive.{" "}
+                  <a
+                    href="https://support.google.com/drive/answer/2494822"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-primary hover:underline"
+                  >
+                    Hướng dẫn
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </p>
+              </div>
+
+              {driveStatus === "ok" && (
+                <div className="flex items-start gap-2 rounded-lg bg-green-500/10 border border-green-500/20 p-3">
+                  <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium text-green-700 dark:text-green-400">
+                      Kết nối thành công
+                    </p>
+                    {driveFileCount !== null && (
+                      <p className="text-xs text-green-600 dark:text-green-500">
+                        Tìm thấy {driveFileCount} tệp trong thư mục. Bạn có thể
+                        dùng biểu tượng <HardDrive className="inline h-3 w-3" />{" "}
+                        trong chat để chọn tệp.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {driveStatus === "error" && driveError && (
+                <div className="flex items-start gap-2 rounded-lg bg-destructive/10 border border-destructive/20 p-3">
+                  <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-medium text-destructive">
+                      Lỗi kết nối
+                    </p>
+                    <p className="text-xs text-destructive/80">{driveError}</p>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center">
+                {driveStatus === "ok" && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearDrive}
+                    className="ml-auto text-white bg-red-500 hover:bg-red-600 text-xs"
+                  >
+                    Xóa cấu hình Drive
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

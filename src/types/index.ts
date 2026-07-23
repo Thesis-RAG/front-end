@@ -149,6 +149,9 @@ export interface Citation {
   surroundingContext: string;
   relevance?: number;
   docRestricted?: boolean;
+  entityAccessRequired?: boolean;
+  entityAccessGranted?: boolean;
+  blockedEntityTypes?: string[];
 }
 
 export interface Conversation {

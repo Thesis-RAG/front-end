@@ -1,12 +1,14 @@
 import { Link } from 'react-router-dom';
 import { ShieldX, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function ForbiddenPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="text-center">
-        <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-destructive/10">
+    <div className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-md">
+        <CardContent className="flex flex-col items-center pt-8 text-center">
+        <div className="mx-auto mb-6 flex size-20 items-center justify-center rounded-full bg-destructive/10">
           <ShieldX className="h-10 w-10 text-destructive" />
         </div>
         <h1 className="text-3xl font-bold">Access Denied</h1>
@@ -24,7 +26,8 @@ export default function ForbiddenPage() {
             </Link>
           </Button>
         </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

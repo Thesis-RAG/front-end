@@ -44,6 +44,14 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
+    /* Semantic feedback colors */
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 24 10% 10%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
     /* Border/Input/Ring */
     --border: 214 24% 88%;
     --input: 214 24% 84%;
@@ -110,6 +118,13 @@
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
+    --success: 142 70% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 24 10% 10%;
+    --info: 199 89% 48%;
+    --info-foreground: 0 0% 100%;
+
     --border: 222 40% 18%;
     --input: 222 40% 18%;
     --ring: 222 40% 35%;
@@ -132,6 +147,18 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    min-width: 320px;
+    margin: 0;
+  }
+
+  #root {
+    min-height: 100vh;
+    width: 100%;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]):not(:disabled) {
+    cursor: pointer;
   }
 
   ::selection {
@@ -192,9 +219,19 @@
   }
 
   .enterprise-page {
-    background:
-      radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.06), transparent 28rem),
-      hsl(var(--background));
+    background: hsl(var(--background));
+  }
+
+  .page-scroll {
+    min-height: 0;
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .page-content {
+    width: 100%;
+    max-width: 1600px;
+    margin-inline: auto;
   }
 
   .enterprise-section-label {

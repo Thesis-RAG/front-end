@@ -12,6 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { DocumentRead } from "@/types/documents";
+import { EntityDetectionPanel } from "./EntityDetectionPanel";
+import type { EntityScopeOption } from "./EntityScopePicker";
+import type { EntityActionConfig, EntityPreview } from "@/services/documents.api";
 
 interface UploadVersionDialogProps {
   open: boolean;
@@ -22,6 +25,12 @@ interface UploadVersionDialogProps {
   uploadingVersion: boolean;
   onUploadVersion: () => void;
   fileVersionInputRef: RefObject<HTMLInputElement>;
+  entityPreview: EntityPreview | null;
+  entityActions: EntityActionConfig[];
+  setEntityActions: (actions: EntityActionConfig[]) => void;
+  detectingEntities: boolean;
+  entityUnitOptions: EntityScopeOption[];
+  entityRoleOptions: EntityScopeOption[];
 }
 
 export function UploadVersionDialog({
@@ -33,10 +42,16 @@ export function UploadVersionDialog({
   uploadingVersion,
   onUploadVersion,
   fileVersionInputRef,
+  entityPreview,
+  entityActions,
+  setEntityActions,
+  detectingEntities,
+  entityUnitOptions,
+  entityRoleOptions,
 }: UploadVersionDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]">
         <DialogHeader>
           <DialogTitle>Tải lên phiên bản mới</DialogTitle>
           <DialogDescription className="text-[12px]">
@@ -81,6 +96,14 @@ export function UploadVersionDialog({
               )}
             </div>
           </div>
+          <EntityDetectionPanel
+            preview={entityPreview}
+            actions={entityActions}
+            onChange={setEntityActions}
+            loading={detectingEntities}
+            unitOptions={entityUnitOptions}
+            roleOptions={entityRoleOptions}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

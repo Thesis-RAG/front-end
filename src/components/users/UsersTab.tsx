@@ -237,7 +237,7 @@ export function UsersTab({
   ).length;
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -317,18 +317,20 @@ export function UsersTab({
         )}
       </div>
 
-      <div className="rounded-lg border border-border bg-card">
-        <Table>
+      <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card">
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[30%] font-bold text-foreground">
+              <TableHead className="w-[38%] font-bold text-foreground">
                 Người dùng
               </TableHead>
-              <TableHead className="font-bold text-foreground">
+              <TableHead className="w-[52%] font-bold text-foreground">
                 Đơn vị & Vị trí
               </TableHead>
-              <TableHead className="font-bold text-foreground">Trạng thái</TableHead>
-              <TableHead className="w-12" />
+              <TableHead className="w-[10%] whitespace-nowrap px-2 font-bold text-foreground">
+                Trạng thái
+              </TableHead>
+              <TableHead className="w-10 px-2" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -348,9 +350,9 @@ export function UsersTab({
               paginatedUsers.map((user, idx) => (
                 <TableRow key={user.id}>
                   {/* Name + email + corp badge */}
-                  <TableCell>
+                  <TableCell className="min-w-0">
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10 shrink-0">
+                      <Avatar className="size-10 shrink-0">
                         <AvatarFallback className={`text-xs font-semibold ${AVATAR_COLORS[idx % AVATAR_COLORS.length]}`}>
                           {initials(user.name)}
                         </AvatarFallback>
@@ -375,33 +377,33 @@ export function UsersTab({
                   </TableCell>
 
                   {/* OUI positions with inline unassign button */}
-                  <TableCell>
+                  <TableCell className="min-w-0">
                     {user.oui_positions.length === 0 ? (
                       <span className="text-[12.5px] text-muted-foreground italic">
                         Chưa gán
                       </span>
                     ) : (
-                      <div className="flex flex-col gap-1 w-fit">
+                      <div className="flex min-w-0 max-w-full flex-col gap-1">
                         {user.oui_positions.map((p) => (
                           <div
                             key={p.oui_id}
-                            className="group relative flex items-center gap-1 rounded-md border bg-muted/40 px-2 py-1 text-xs w-fit whitespace-nowrap"
+                            className="group relative flex min-w-0 max-w-full flex-wrap items-center gap-1 rounded-md border bg-muted/40 px-2 py-1 text-xs"
                           >
-                            <span className="text-muted-foreground">
+                            <span className="min-w-0 text-muted-foreground">
                               {getOuName(p.ou_id)} /
                             </span>
-                            <span className="font-medium">{p.oui_name}</span>
-                            <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-primary">{p.position_name}</span>
+                            <span className="min-w-0 font-medium">{p.oui_name}</span>
+                            <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            <span className="min-w-0 text-primary">{p.position_name}</span>
                             <Badge
                               variant="secondary"
-                              className={`text-[10px] px-1.5 py-0 font-normal ml-1 ${CLEARANCE_CLASS[p.clearance]}`}
+                              className={`ml-1 shrink-0 px-1.5 py-0 text-[10px] font-normal ${CLEARANCE_CLASS[p.clearance]}`}
                             >
                               {CLEARANCE_LABELS[p.clearance]}
                             </Badge>
                             <button
                               onClick={() => handleUnassign(user.id, p.oui_id)}
-                              className="ml-1 opacity-0 group-hover:opacity-100 text-destructive transition-opacity"
+                              className="ml-1 shrink-0 text-destructive opacity-0 transition-opacity group-hover:opacity-100"
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -412,7 +414,7 @@ export function UsersTab({
                   </TableCell>
 
                   {/* Status indicator */}
-                  <TableCell>
+                  <TableCell className="w-[10%] whitespace-nowrap px-2">
                     <div className="flex items-center gap-1.5">
                       <div
                         className={`h-2 w-2 rounded-full ${user.status === "active" ? "bg-green-500" : "bg-muted-foreground"}`}
@@ -428,7 +430,7 @@ export function UsersTab({
                   </TableCell>
 
                   {/* Actions dropdown */}
-                  <TableCell>
+                  <TableCell className="w-10 px-2">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -468,12 +470,12 @@ export function UsersTab({
       </div>
 
       {/* Pagination footer */}
-      <div className="flex items-center justify-between gap-4 pt-1">
-        <p className="ml-2 text-[12.5px] text-muted-foreground shrink-0">
+      <div className="flex flex-col items-start justify-between gap-3 pt-1 sm:flex-row sm:items-center">
+        <p className="text-[12.5px] text-muted-foreground shrink-0 sm:ml-2">
           Hiển thị {sorted.length === 0 ? 0 : (safePage - 1) * pageSize + 1} đến {Math.min(safePage * pageSize, sorted.length)} trong tổng số {sorted.length.toLocaleString("vi-VN")} người dùng
         </p>
 
-        <div className="flex items-center gap-1">
+        <div className="flex max-w-full flex-wrap items-center gap-1">
           <button
             disabled={safePage === 1}
             onClick={() => setCurrentPage(safePage - 1)}
