@@ -202,19 +202,12 @@ export default function DocumentsPage() {
     }
     try {
       const preview = await previewDocumentEntities(file, token);
-      const actions = preview.entity_types.map((entity_type) => ({
-        entity_type,
-        label: entity_type,
-        action: "full" as const,
-        source: "gliner" as const,
-        enabled: true,
-      }));
       if (version) {
         setVersionEntityPreview(preview);
-        setVersionEntityActions(actions);
+        setVersionEntityActions([]);
       } else {
         setUploadEntityPreview(preview);
-        setUploadEntityActions(actions);
+        setUploadEntityActions([]);
       }
     } catch (err: any) {
       toast({ variant: "destructive", title: "Không thể detect thực thể", description: err?.message });
@@ -236,7 +229,7 @@ export default function DocumentsPage() {
         { title, oui_ids: uploadOuiIds, sensitivity: uploadSensitivity, data_type: "file", document_type },
         token,
       );
-      await uploadDocumentVersion(doc.id, selectedFile, token, uploadEntityActions);
+      await uploadDocumentVersion(doc.id, selectedFile, token);
       if (!isCorpMember) await submitForReview(doc.id, token);
       toast({ variant: "success", title: "Tải lên thành công" });
       setUploadDialogOpen(false);
@@ -296,7 +289,7 @@ export default function DocumentsPage() {
     if (!versionTarget || !selectedVersionFile) return;
     setUploadingVersion(true);
     try {
-      await uploadDocumentVersion(versionTarget.id, selectedVersionFile, token, versionEntityActions);
+      await uploadDocumentVersion(versionTarget.id, selectedVersionFile, token);
       toast({ variant: "success", title: "Đã tải lên phiên bản mới" });
       setVersionDialogOpen(false);
       setVersionTarget(null);

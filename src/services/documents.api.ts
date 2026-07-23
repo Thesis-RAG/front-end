@@ -40,6 +40,16 @@ export type EntityPreview = {
   text_truncated: boolean;
   entities: EntityPreviewEntity[];
   entity_types: string[];
+  confirmed_labels: string[];
+  policy_profile: string;
+  policy_version: string;
+  applied_rules: Array<{
+    entity_key: string;
+    display_name: string;
+    action: EntityAction;
+    detection_count: number;
+  }>;
+  action_summary: Record<EntityAction, number>;
 };
 
 export async function previewDocumentEntities(
@@ -124,11 +134,9 @@ export async function uploadDocumentVersion(
   documentId: string,
   file: File,
   token: string,
-  entityActions: EntityActionConfig[] = [],
 ) {
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("entity_actions_json", JSON.stringify(entityActions));
   const res = await fetch(
     `${ENV.API_BASE_URL}/documents/${documentId}/versions`,
     {
