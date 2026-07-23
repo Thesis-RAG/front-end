@@ -148,7 +148,7 @@ export default function PolicyPage() {
         title="Rules"
         description="Quản lý tập trung label, action và phạm vi áp dụng cho các tài liệu upload sau này."
         actions={(
-          <Button variant="outline" onClick={reset}>
+          <Button onClick={reset}>
             <Plus data-icon="inline-start" /> Thêm label
           </Button>
         )}
