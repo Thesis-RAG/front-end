@@ -72,7 +72,7 @@ export function UploadDialog({
 }: UploadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[680px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Tải lên tài liệu</DialogTitle>
           <DialogDescription className="text-[12.5px]">
